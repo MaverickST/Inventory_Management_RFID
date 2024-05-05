@@ -3,8 +3,8 @@
  * \brief
  * \details
  * \author      MST_CDA
- * \version     0.0.1
- * \date        05/10/2023
+ * \version     0.0.2
+ * \date        03/05/2024
  * \copyright   Unlicensed
  */
 #include <stdlib.h>
@@ -16,7 +16,6 @@
 #include "hardware/timer.h"
 
 #include "keypad_irq.h"
-
 #include "functs.h"
 
 uint32_t gDBNC_TIME;
@@ -102,11 +101,11 @@ void kp_decode(key_pad_t *kpad){
     
 }
 
-void kp_capture(key_pad_t *kpad, uint32_t cols, uint32_t rows){
+void kp_capture(key_pad_t *kpad){
 
     if (!kpad->KEY.en) return;
 
-    kpad->KEY.ckey = (cols >> 2) | (rows >> 2);
+    kpad->KEY.ckey = (kpad->cols >> 2) | (kpad->rows >> 2);
     kp_decode(kpad);
     for(int i=0;i<9;i++){
         kpad->history[9-i] = kpad->history[9-i-1];
@@ -167,6 +166,7 @@ void kp_set_irq_rows(key_pad_t *kpad)
 
 void kp_dbnc_set_alarm(key_pad_t *kpad)
 {
+    kpad->KEY.dbnc = 1;
     // Interrupt acknowledge
     hw_clear_bits(&timer_hw->intr, 1u << TIMER_IRQ_1);
 

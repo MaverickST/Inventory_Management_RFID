@@ -62,15 +62,6 @@ bool check();
 void gpioCallback(uint num, uint32_t mask);
 
 /**
- * @brief Definition of the keypad callback function, which will be called by the handler of the GPIO interruptions.
- * 
- * @param num 
- * @param mask 
- */
-void keypadCallback(uint num, uint32_t mask);
-
-
-/**
  * @brief Handler for the debouncer timer interruptions.
  * 
  */
@@ -85,20 +76,9 @@ static inline bool checkNumber(uint8_t number){
 }
 
 static inline bool checkLetter(uint8_t letter){
-    return (letter >= 0x0A && letter <= 0x0C);
+    return (letter >= 0x0A && letter <= 0x0D);
 }
 
-static inline bool checkFreq(uint32_t freq){
-    return (freq >= 1 && freq <= 12000000);
-}
-
-static inline bool checkAmp(uint32_t amp){
-    return (amp >= 100 && amp <= 2500);
-}
-
-static inline bool checkOffset(uint32_t offset){
-    return (offset >= 50 && offset <= 1250);
-}
 
 #endif // FUNTCS
 
