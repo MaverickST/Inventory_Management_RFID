@@ -24,11 +24,13 @@ typedef struct
         uint8_t purchase_v;
         uint8_t sale_v;
     }tag;
+
+    enum {NONE, ADMIN, INV, USER} userType;
     
     
 }nfc_rfid_t;
 
-void nfc_init_as_spi(nfc_rfid_t nfc, uint8_t mosi, uint8_t miso, uint8_t sda, uint8_t scl, uint8_t irq);
+void nfc_init_as_spi(nfc_rfid_t nfc, uint8_t mosi, uint8_t miso, uint8_t csn, uint8_t scl, uint8_t irq);
 
 // MFRC522 registers. Described in chapter 9 of the datasheet.
 // When using SPI all addresses are shifted one bit left in the "SPI address byte" (section 8.1.2.3)

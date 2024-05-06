@@ -28,7 +28,7 @@
 
 uint8_t gLed = 18;
 key_pad_t gKeyPad;
-nfc_rfid_t gTag;
+nfc_rfid_t gNFC;
 
 uint8_t irq_tag_pin = 20;
 bool gTag_entering = false; // Flag that indicates that a tag is being entered
@@ -39,6 +39,7 @@ void initGlobalVariables(void)
 {
     gFlags.W = 0x00U;
     kp_init(&gKeyPad, 2, 6, 100000, true);
+    // nfc_init_as_spi(&gNFC);
     led_init(gLed);
 }
 
@@ -47,6 +48,85 @@ void program(void)
     if(gFlags.B.key){
         kp_capture(&gKeyPad);
         gFlags.B.key = 0;
+
+        uint8_t key = gKeyPad.KEY.dkey;
+        // State machine of the inventory management
+        static enum {inNONE, AMOUNT, PURCHASE, SALE} in_state_inv = inNONE;
+        static enum {idNONE, ID1, ID2, ID3, ID4, ID5} id_state_inv = idNONE;
+        static uint32_t in_value = 0;
+
+        switch (gNFC.userType)
+        {
+        case ADMIN: // Admin is entering
+            /* code */
+            break;
+            
+        case INV: // Inventory management user is entering
+            // Select the type of data to enter
+            if ((key >= 0x0A && key <= 0x0C) && in_state_inv == inNONE) {
+                switch (key)
+                {
+                case 0x0A:
+                    in_state_inv = AMOUNT;
+                    break;
+                case 0x0B:
+                    in_state_inv = PURCHASE;
+                    break;
+                case 0x0C:
+                    in_state_inv = SALE;
+                    break;
+                default:
+                    break;
+                }
+            }
+            // Select the ID of the product
+            else if ((key >= 0x00 && key <= 0x09) && in_state_inv != inNONE && id_state_inv == idNONE){
+                if (key >= 0x01 && key <=0x05) {
+                    gNFC.tag.id = key;
+                    id_state_inv = key;
+                }else {
+                    printf("Invalid ID\n");
+                    in_state_inv = inNONE; // Reset the state machine
+                }
+            }
+            else if ((key >= 0x00 && key <= 0x09) && in_state_inv != inNONE && id_state_inv != idNONE){
+                id_state_inv = ID1;
+                in_value = in_value*10 + key;
+            }
+            else if (key == 0x0D && in_state_inv != inNONE && id_state_inv != idNONE){
+                switch (in_state_inv)
+                {
+                case AMOUNT:
+                    gNFC.tag.amount = in_value; // Actualy, it should update an inventory database
+                    break;
+                case PURCHASE:
+                    gNFC.tag.purchase_v = in_value;
+                    break;
+                case SALE:
+                    gNFC.tag.sale_v = in_value;
+                    break;
+                default:
+                    break;
+                }
+                in_state_inv = inNONE; // Reset the state machine
+                id_state_inv = idNONE;
+                in_value = 0;
+            }else {
+                printf("Invalid key\n");
+                in_state_inv = inNONE; // Reset the state machine
+                id_state_inv = idNONE
+                in_value = 0;
+            }
+            
+            break;
+
+        case USER: // User is entering
+            /* code */
+            break;
+
+        default:
+            break;
+        }
     }
     if(gFlags.B.tag){
         gFlags.B.tag = 0;
@@ -91,7 +171,7 @@ void gpioCallback(uint num, uint32_t mask)
         break;
     
     default:
-        printf("Happend what should not happens on GPIO IRQ\n");
+        printf("Happend what should not happens on GPIO CALLBACK\n");
         break;
     }
     
@@ -114,6 +194,6 @@ void gpioCallback(uint num, uint32_t mask)
     }else {
         kp_set_irq_cols(&gKeyPad); // Switch interrupt to columns
         gKeyPad.KEY.dbnc = 0;
-        gFlags.B.key = 1;
+        gFlags.B.key = 1; // The key is processed once the debouncer is finished
     }
 }
