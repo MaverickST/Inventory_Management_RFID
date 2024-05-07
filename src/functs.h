@@ -21,7 +21,7 @@ typedef union{
     uint8_t W;
     struct{
         uint8_t key     :1; //keypad interruption pending
-        uint8_t tag     :1; //tag interruption pending
+        uint8_t nfc     :1; //tag interruption pending
         uint8_t admin   :1; //admin interruption pending
         uint8_t inv     :1; //inventory interruption pending
         uint8_t user    :1; //user interruption pending

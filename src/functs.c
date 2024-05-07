@@ -30,7 +30,7 @@ uint8_t gLed = 18;
 key_pad_t gKeyPad;
 nfc_rfid_t gNFC;
 
-uint8_t irq_tag_pin = 20;
+uint8_t irq_nfc_pin = 20;
 bool gTag_entering = false; // Flag that indicates that a tag is being entered
 
 volatile flags_t gFlags; // Global variable that stores the flags of the interruptions pending
@@ -50,15 +50,51 @@ void program(void)
         gFlags.B.key = 0;
 
         uint8_t key = gKeyPad.KEY.dkey;
+        static uint32_t in_value = 0;
+        static uint8_t in_cont = 0;
+
+        // State machine of the admin
+        // The admin password is 1234 (4 digits) at the beginning
+        static enum {adminNONE, PASS} in_state_admin = adminNONE;
+
         // State machine of the inventory management
         static enum {inNONE, AMOUNT, PURCHASE, SALE} in_state_inv = inNONE;
         static enum {idNONE, ID1, ID2, ID3, ID4, ID5} id_state_inv = idNONE;
-        static uint32_t in_value = 0;
 
         switch (gNFC.userType)
         {
         case ADMIN: // Admin is entering
-            /* code */
+            if (key >= 0x00 && key <= 0x09 && in_state_admin == adminNONE){
+                in_value = in_value*10 + key;
+                in_cont++;
+                if (in_cont == 4){
+                    if (in_value == 1234){
+                        in_state_admin = PASS;
+                        printf("Correct password\n");
+                    }else {
+                        printf("Incorrect password\n");
+                        gTag_entering = false;
+                        in_state_admin = adminNONE;
+                        in_value = 0;
+                        in_cont = 0;
+                    }
+                }
+            }
+            // Reset the inventory database
+            else if (key == 0x0E && in_state_admin == PASS) {
+                printf("Reset inventory database\n"); // Actually, it should reset an inventory database
+            }
+            else if (key == 0x0D){
+                printf("Finished\n");
+                gTag_entering = false;
+                in_state_admin = adminNONE;
+                in_value = 0;
+                in_cont = 0;
+            }
+            else {
+                printf("Invalid key\n");
+            }
+            
             break;
             
         case INV: // Inventory management user is entering
@@ -89,15 +125,15 @@ void program(void)
                     in_state_inv = inNONE; // Reset the state machine
                 }
             }
+            // Enter the value of the data
             else if ((key >= 0x00 && key <= 0x09) && in_state_inv != inNONE && id_state_inv != idNONE){
-                id_state_inv = ID1;
                 in_value = in_value*10 + key;
             }
             else if (key == 0x0D && in_state_inv != inNONE && id_state_inv != idNONE){
                 switch (in_state_inv)
                 {
                 case AMOUNT:
-                    gNFC.tag.amount = in_value; // Actualy, it should update an inventory database
+                    gNFC.tag.amount = in_value; // Actually, it should update an inventory database
                     break;
                 case PURCHASE:
                     gNFC.tag.purchase_v = in_value;
@@ -111,7 +147,13 @@ void program(void)
                 in_state_inv = inNONE; // Reset the state machine
                 id_state_inv = idNONE;
                 in_value = 0;
-            }else {
+            }
+            // Finish the process
+            else if (key == 0x0D && in_state_inv == inNONE && id_state_inv == idNONE) {
+                gTag_entering = false;
+                printf("Finished \n");
+            }
+            else {
                 printf("Invalid key\n");
                 in_state_inv = inNONE; // Reset the state machine
                 id_state_inv = idNONE
@@ -128,10 +170,16 @@ void program(void)
             break;
         }
     }
-    if(gFlags.B.tag){
-        gFlags.B.tag = 0;
-        gTag_entering = false;
-        printf("Tag entering\n");
+    if(gFlags.B.nfc){
+            printf("Tag entering\n");
+            gFlags.B.nfc = 0;
+            /* Processs the tag
+            */
+
+        if (gNFC.userType == USER){
+            printf("User\n");
+            // Actually, it show in the display the tag information
+        }
     }
 }
 
@@ -149,8 +197,8 @@ void gpioCallback(uint num, uint32_t mask)
     {
     case GPIO_IRQ_EDGE_RISE:
         // Just one tag can be entering at the same time
-        if (num == irq_tag_pin && !gTag_entering){
-            gFlags.B.tag = 1;
+        if (num == irq_nfc_pin && !gTag_entering){
+            gFlags.B.nfc = 1;
             gTag_entering = true;
         }
         // If a tag is entering, the columns are captured

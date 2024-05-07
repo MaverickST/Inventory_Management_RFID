@@ -13,4 +13,10 @@
 
 #include <stdint.h>
 
+typedef struct
+{
+    /* data */
+}inventory_t;
+
+
 #endif // __INVENTORY_
