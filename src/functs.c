@@ -16,7 +16,6 @@
 #include "pico/stdlib.h"
 #include "pico/time.h"
 #include "hardware/timer.h"
-#include "hardware/pwm.h"
 #include "hardware/irq.h"
 #include "hardware/gpio.h"
 #include "hardware/sync.h"
@@ -25,10 +24,12 @@
 #include "keypad_irq.h"
 #include "gpio_led.h"
 #include "nfc_rfid.h"
+#include "inventory.h"
 
 uint8_t gLed = 18;
 key_pad_t gKeyPad;
 nfc_rfid_t gNFC;
+inventory_t gInventory;
 
 uint8_t irq_nfc_pin = 20;
 bool gTag_entering = false; // Flag that indicates that a tag is being entered
@@ -38,9 +39,10 @@ volatile flags_t gFlags; // Global variable that stores the flags of the interru
 void initGlobalVariables(void)
 {
     gFlags.W = 0x00U;
+    led_init(gLed);
     kp_init(&gKeyPad, 2, 6, 100000, true);
     // nfc_init_as_spi(&gNFC);
-    led_init(gLed);
+    // inventory_init(&gInventory);
 }
 
 void program(void)
@@ -64,7 +66,7 @@ void program(void)
         switch (gNFC.userType)
         {
         case ADMIN: // Admin is entering
-            if (key >= 0x00 && key <= 0x09 && in_state_admin == adminNONE){
+            if (checkNumber(key) && in_state_admin == adminNONE){
                 in_value = in_value*10 + key;
                 in_cont++;
                 if (in_cont == 4){
@@ -116,7 +118,7 @@ void program(void)
                 }
             }
             // Select the ID of the product
-            else if ((key >= 0x00 && key <= 0x09) && in_state_inv != inNONE && id_state_inv == idNONE){
+            else if (checkNumber(key) && in_state_inv != inNONE && id_state_inv == idNONE){
                 if (key >= 0x01 && key <=0x05) {
                     gNFC.tag.id = key;
                     id_state_inv = key;
@@ -126,20 +128,21 @@ void program(void)
                 }
             }
             // Enter the value of the data
-            else if ((key >= 0x00 && key <= 0x09) && in_state_inv != inNONE && id_state_inv != idNONE){
+            else if (checkNumber(key) && in_state_inv != inNONE && id_state_inv != idNONE){
                 in_value = in_value*10 + key;
             }
+            // Update the database
             else if (key == 0x0D && in_state_inv != inNONE && id_state_inv != idNONE){
                 switch (in_state_inv)
                 {
                 case AMOUNT:
-                    gNFC.tag.amount = in_value; // Actually, it should update an inventory database
+                    gInventory.database[id_state_inv - 1][0] = in_value;
                     break;
                 case PURCHASE:
-                    gNFC.tag.purchase_v = in_value;
+                    gInventory.database[id_state_inv - 1][1] = in_value;
                     break;
                 case SALE:
-                    gNFC.tag.sale_v = in_value;
+                    gInventory.database[id_state_inv - 1][2] = in_value;
                     break;
                 default:
                     break;
@@ -156,14 +159,21 @@ void program(void)
             else {
                 printf("Invalid key\n");
                 in_state_inv = inNONE; // Reset the state machine
-                id_state_inv = idNONE
+                id_state_inv = idNONE;
                 in_value = 0;
             }
             
             break;
 
         case USER: // User is entering
-            /* code */
+            // Input transaction
+            if (key == 0x0A) {
+
+            }
+            // Output transaction
+            else if (key == 0x0B) {
+
+            }
             break;
 
         default:
@@ -173,7 +183,7 @@ void program(void)
     if(gFlags.B.nfc){
             printf("Tag entering\n");
             gFlags.B.nfc = 0;
-            /* Processs the tag
+            /* Processs the tag ................
             */
 
         if (gNFC.userType == USER){
