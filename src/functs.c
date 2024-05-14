@@ -42,7 +42,7 @@ void initGlobalVariables(void)
     led_init(gLed);
     kp_init(&gKeyPad, 2, 6, 100000, true);
     // nfc_init_as_spi(&gNFC);
-    // inventory_init(&gInventory);
+    inventory_init(&gInventory, false);
 }
 
 void program(void)
@@ -147,6 +147,7 @@ void program(void)
                 default:
                     break;
                 }
+                // inventory_store(&gInventory);
                 in_state_inv = inNONE; // Reset the state machine
                 id_state_inv = idNONE;
                 in_value = 0;
@@ -207,8 +208,8 @@ void gpioCallback(uint num, uint32_t mask)
     {
     case GPIO_IRQ_EDGE_RISE:
         // Just one tag can be entering at the same time
-        if (num == irq_nfc_pin && !gTag_entering){
-            gFlags.B.nfc = 1;
+        if (num == gNFC.pinout.irq && !gTag_entering){
+            nfc_get_nbf(&gNFC); // Init the process to get the number of bytes in the NFC FIFO
             gTag_entering = true;
         }
         // If a tag is entering, the columns are captured
@@ -254,4 +255,28 @@ void gpioCallback(uint num, uint32_t mask)
         gKeyPad.KEY.dbnc = 0;
         gFlags.B.key = 1; // The key is processed once the debouncer is finished
     }
+}
+
+void i2c_handler(void)
+{
+    // Check for an abort condition
+    uint32_t abort_reason = gNFC.i2c->hw->tx_abrt_source;
+    if (abort_reason){
+        // Note clearing the abort flag also clears the reason, and
+        // this instance of flag is clear-on-read! Note also the
+        // IC_CLR_TX_ABRT register always reads as 0.
+        gNFC.i2c->hw->clr_tx_abrt;
+        printf("Config - I2C abort reason: %08x\n", abort_reason);
+        // nfc_config_mfrc522_irq(&gNFC);
+        gNFC.i2c_fifo_stat.tx = 0;
+        return;
+    }
+
+    if (gNFC.i2c->hw->raw_intr_stat){
+        nfc_i2c_callback(&gNFC);
+    }
+
+    // Clear the interrupt
+    gNFC.i2c->hw->clr_intr;
+    
 }

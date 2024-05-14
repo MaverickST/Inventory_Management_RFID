@@ -50,7 +50,7 @@ void program(void);
 bool check();
 
 // -------------------------------------------------------------
-// ---------------------- Callback functions -------------------
+// ---------------- Callback and handler functions -------------
 // -------------------------------------------------------------
 
 /**
@@ -66,6 +66,12 @@ void gpioCallback(uint num, uint32_t mask);
  * 
  */
 void dbnc_timer_handler(void);
+
+/**
+ * @brief Handler for the I2C interruptions.
+ * 
+ */
+void i2c_handler(void);
 
 // -------------------------------------------------------------
 // ---------------------- Check functions ----------------------

@@ -16,6 +16,8 @@ add_executable(invmanage
 	main.c
 	functs.c
 	keypad_irq.c
+	inventory.c
+	nfc_rfid.c
 )
 
 target_include_directories(invmanage PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
@@ -28,7 +30,8 @@ target_link_libraries(invmanage
 	hardware_gpio 
 	hardware_pwm 
 	hardware_irq 
-	hardware_sync)
+	hardware_sync
+	hardware_i2c)
 
 pico_enable_stdio_uart(invmanage 0)
 pico_enable_stdio_usb(invmanage 1)
