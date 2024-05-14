@@ -37,21 +37,21 @@ typedef struct
         uint8_t irq;
     }pinout;
 
-    uint8_t fifo[64]; // Data of the nfc fifo
-    uint8_t nbf; // number of bytes in the nfc fifo (max 64)
-    uint8_t idx_fifo; // Index of the nfc fifo
-    uint8_t i2c_irq; // I2C IRQ number (23 or 24)
-    i2c_inst_t *i2c;
-
     union{
         uint8_t W;
         struct{
-            uint8_t nbf     :1; // get the number of bytes in the fifo interrupt pending
-            uint8_t dfifo   :1; // get the data from the nfc fifo interrupt pending
-            uint8_t dtag    :1; // get the data tag from the nfc fifo interrupt pending
+            uint8_t nbf     :1; ///< get the number of bytes in the fifo interrupt pending
+            uint8_t dfifo   :1; ///< get the data from the nfc fifo interrupt pending
+            uint8_t dtag    :1; ///< get the data tag from the nfc fifo interrupt pending
             uint8_t         :5;
         }B;
     }flags;
+
+    uint8_t fifo[64]; ///< Data of the nfc fifo
+    uint8_t nbf; ///< number of bytes in the nfc fifo (max 64)
+    uint8_t idx_fifo; ///< Index of the nfc fifo
+    uint8_t i2c_irq; ///< I2C IRQ number (23 or 24)
+    i2c_inst_t *i2c; ///< I2C instance
 
     enum {NONE, ADMIN, INV, USER} userType;
     
@@ -69,26 +69,67 @@ typedef struct
 void nfc_init_as_i2c(nfc_rfid_t *nfc, i2c_inst_t *_i2c, uint8_t sda, uint8_t scl, uint8_t irq);
 
 /**
- * @brief This function allows to configure the MFRC522 IRQ from initilization a sequence on the I2C bus.
- * 
- * @param nfc 
- */
-static inline void nfc_config_mfrc522_irq(nfc_rfid_t *nfc);
-
-/**
- * @brief This function allows to get the number of bytes in the NFC FIFO.
- * 
- * @param nfc 
- */
-static inline void nfc_get_nbf(nfc_rfid_t *nfc);
-
-/**
  * @brief Callback function for the I2C interruption, which is called by the I2C handler.
  * 
  * @param nfc 
  */
 void nfc_i2c_callback(nfc_rfid_t *nfc);
 
+/**
+ * @brief From the nfc fifo, get the data tag.
+ * 
+ * @param nfc 
+ */
+void nfc_get_data_tag(nfc_rfid_t *nfc);
+
+/**
+ * @brief This function allows to configure the MFRC522 IRQ from initilization a sequence on the I2C bus.
+ * 
+ * @param nfc 
+ */
+static inline void nfc_config_mfrc522_irq(nfc_rfid_t *nfc)
+{
+    // Enable the DW_apb_i2c to start transmitting
+    nfc->i2c->hw->enable = true;
+    irq_set_enabled(nfc->i2c_irq, true);
+    nfc->i2c_fifo_stat.rw = single_WRITE; ///< Sigle write: configures de irq ping of the nfc
+    // Write the slave address to the DW_apb_i2c
+    nfc->i2c->hw->data_cmd = ADDRESS_SLAVE_MFRC522;
+    nfc->i2c_fifo_stat.tx = dev_ADDRESS;
+}
+
+/**
+ * @brief This function allows to get the number of bytes in the NFC FIFO.
+ * 
+ * @param nfc 
+ */
+static inline void nfc_get_nbf(nfc_rfid_t *nfc)
+{
+    // Enable the DW_apb_i2c to start transmitting
+    nfc->i2c->hw->enable = true;
+    irq_set_enabled(nfc->i2c_irq, true);
+    nfc->i2c_fifo_stat.rw = single_READ; ///< Single read: read number of bytes of the FIFO
+    // Write the slave address to the DW_apb_i2c
+    nfc->i2c->hw->data_cmd = ADDRESS_SLAVE_MFRC522;
+    nfc->i2c_fifo_stat.tx = dev_ADDRESS;
+}
+
+/**
+ * @brief This function allows to get the data from the NFC FIFO.
+ * 
+ * @param nfc 
+ */
+
+static inline void nfc_get_data_fifo(nfc_rfid_t *nfc)
+{
+    // Enable the DW_apb_i2c to start transmitting
+    nfc->i2c->hw->enable = true;
+    irq_set_enabled(nfc->i2c_irq, true);
+    nfc->i2c_fifo_stat.rw = mult_READ; // Multiple read
+    // Write the slave address to the DW_apb_i2c
+    nfc->i2c->hw->data_cmd = ADDRESS_SLAVE_MFRC522;
+    nfc->i2c_fifo_stat.tx = dev_ADDRESS;
+}
 
 // MFRC522 registers. Described in chapter 9 of the datasheet.
 // When using SPI all addresses are shifted one bit left in the "SPI address byte" (section 8.1.2.3)

@@ -44,38 +44,21 @@ void nfc_init_as_i2c(nfc_rfid_t *nfc, i2c_inst_t *_i2c, uint8_t sda, uint8_t scl
     gpio_set_function(scl, GPIO_FUNC_I2C);
     gpio_pull_up(scl);
 
-    i2c_init(_i2c, 400000); // Initialize the I2C bus with a speed of 400 kbps (fast mode)
-    _i2c->hw->con &= ~(1 << 4); // Set Master 7Bit addressing mode (0 -> 7bit, 1 -> 10bit)
-
-    // Set interrupt handler
+    i2c_init(_i2c, 400000); ///< Initialize the I2C bus with a speed of 400 kbps (fast mode)
+    _i2c->hw->con &= ~(1 << 4); ///< Set Master 7Bit addressing mode (0 -> 7bit, 1 -> 10bit)
     irq_set_exclusive_handler(nfc->i2c_irq, i2c_handler);
+
+    // Set the IRQ pin as input
+    gpio_init(irq);
+    gpio_set_dir(irq, GPIO_IN);
+    gpio_pull_down(irq);
+    gpio_set_irq_enabled_with_callback(irq, GPIO_IRQ_EDGE_RISE, true, gpioCallback);
 
     // Initialize the configuration of the MFRC522
     nfc_config_mfrc522_irq(nfc);
 
 }
 
-static inline void nfc_config_mfrc522_irq(nfc_rfid_t *nfc)
-{
-    // Enable the DW_apb_i2c to start transmitting
-    nfc->i2c->hw->enable = true;
-    irq_set_enabled(nfc->i2c_irq, true);
-    nfc->i2c_fifo_stat.rw = single_WRITE;
-    // Write the slave address to the DW_apb_i2c
-    nfc->i2c->hw->data_cmd = ADDRESS_SLAVE_MFRC522;
-    nfc->i2c_fifo_stat.tx = dev_ADDRESS;
-}
-
-inline void nfc_get_nbf(nfc_rfid_t *nfc)
-{
-    // Enable the DW_apb_i2c to start transmitting
-    nfc->i2c->hw->enable = true;
-    irq_set_enabled(nfc->i2c_irq, true);
-    nfc->i2c_fifo_stat.rw = single_READ; // Single read: read number of bytes of the FIFO
-    // Write the slave address to the DW_apb_i2c
-    nfc->i2c->hw->data_cmd = ADDRESS_SLAVE_MFRC522;
-    nfc->i2c_fifo_stat.tx = dev_ADDRESS;
-}
 
 void nfc_i2c_callback(nfc_rfid_t *nfc)
 {
@@ -86,42 +69,42 @@ void nfc_i2c_callback(nfc_rfid_t *nfc)
         printf("TX_EMPTY\n");
         switch (nfc->i2c_fifo_stat.tx)
         {
-        case dev_ADDRESS: // Device address was sent
-            // Send the register address
-            if (!nfc->i2c_fifo_stat.rw){ // Single write (it refers to the NFC configuration)
+        case dev_ADDRESS: ///< Device address was sent
+            ///< Send the register address
+            if (nfc->i2c_fifo_stat.rw == single_WRITE){     ///< Single write (it refers to the NFC configuration)
                 nfc->i2c->hw->data_cmd = ComIEnReg;
             }
-            else if (nfc->i2c_fifo_stat.rw == mult_READ){ // Multiple read
+            else if (nfc->i2c_fifo_stat.rw == mult_READ){   ///< Multiple read
                 nfc->i2c->hw->data_cmd = FIFODataReg;
             }
-            else{ // Single read: read number of bytes
+            else{                                           ///< Single read: read number of bytes
                 nfc->i2c->hw->data_cmd = FIFOLevelReg;
             }
             nfc->i2c_fifo_stat.tx = reg_ADDRESS;
 
             break;
 
-        case reg_ADDRESS: // Register address was sent
+        case reg_ADDRESS: ///< Register address was sent
             // Send the data
-            regVal = 0xA0; // rx irq of ComIEnReg in MFRC522 is enabled
-            if (!nfc->i2c_fifo_stat.rw){ // Single write (it refers to the NFC configuration)
+            regVal = 0xA0; ///< rx irq of ComIEnReg in MFRC522 is enabled
+            if (nfc->i2c_fifo_stat.rw == single_WRITE){     ///< Single write (it refers to the NFC configuration)
                 nfc->i2c->hw->data_cmd = I2C_IC_DATA_CMD_STOP_BITS | (uint32_t)regVal;
             }
-            else if (nfc->i2c_fifo_stat.rw == mult_READ){ // Multiple read
+            else if (nfc->i2c_fifo_stat.rw == mult_READ){   ///< Multiple read
                 nfc->i2c->hw->data_cmd = I2C_IC_DATA_CMD_CMD_BITS | I2C_IC_DATA_CMD_RESTART_BITS | (uint32_t)ADDRESS_SLAVE_MFRC522;
             }
-            else { // Single read: read number of bytes            |       read next byte     |
+            else {                                          ///< Single read: read number of bytes
                 nfc->i2c->hw->data_cmd = I2C_IC_DATA_CMD_STOP_BITS | I2C_IC_DATA_CMD_CMD_BITS | 
                                          I2C_IC_DATA_CMD_RESTART_BITS | (uint32_t)ADDRESS_SLAVE_MFRC522;
             }
             nfc->i2c_fifo_stat.tx = data_SENT;
             break;
 
-        case data_SENT: // Data was sent
-            if (!nfc->i2c_fifo_stat.rw){ // Single write
+        case data_SENT: ///< Data was sent
+            if (!nfc->i2c_fifo_stat.rw){ ///< Single write
                 printf("Initial configuration of NFC finished\n");
-                irq_set_enabled(nfc->i2c_irq, false); // The initial configuration to NFC is finished
-                nfc->i2c->hw->enable = false; // Disable the DW_apb_i2c
+                irq_set_enabled(nfc->i2c_irq, false); ///< The initial configuration to NFC is finished
+                nfc->i2c->hw->enable = false; ///< Disable the DW_apb_i2c
             }
             else {
                 printf("Single and multiple reading generated an irq\n");
@@ -134,22 +117,26 @@ void nfc_i2c_callback(nfc_rfid_t *nfc)
         break;
     case I2C_IC_RAW_INTR_STAT_RX_FULL_BITS:
         printf("RX_FULL\n");
-        if (nfc->i2c_fifo_stat.rw == 1){ // Multiple read
+        if (nfc->i2c_fifo_stat.rw == mult_READ){        ///< Multiple read
             if (nfc->nbf - 1 == nfc->idx_fifo){
-                irq_set_enabled(nfc->i2c_irq, false); // The reading of the number of bytes is finished
-                nfc->i2c->hw->enable = false; // Disable the DW_apb_i2c
                 nfc->fifo[nfc->idx_fifo] = (uint8_t)nfc->i2c->hw->data_cmd;
+                irq_set_enabled(nfc->i2c_irq, false); ///< The reading of the number of bytes is finished
+                nfc->i2c->hw->enable = false; ///< Disable the DW_apb_i2c
                 nfc->idx_fifo = 0;
+                nfc->flags.B.dtag = 1; ///< Activate the flag organize the data from fifo to the tag structure
             }
             else {
                 nfc->fifo[nfc->idx_fifo] = (uint8_t)nfc->i2c->hw->data_cmd;
                 nfc->idx_fifo++;
             }
         }
-        else if (nfc->i2c_fifo_stat.rw == 2){ // Single read: read number of bytes
-            irq_set_enabled(nfc->i2c_irq, false); // The reading of the number of bytes is finished
-            nfc->i2c->hw->enable = false; // Disable the DW_apb_i2c
+        else if (nfc->i2c_fifo_stat.rw == single_READ){ ///< Single read: read number of bytes
             nfc->nbf = (uint8_t)nfc->i2c->hw->data_cmd;
+            irq_set_enabled(nfc->i2c_irq, false); ///< The reading of the number of bytes is finished
+            nfc->i2c->hw->enable = false; ///< Disable the DW_apb_i2c
+            nfc->flags.B.dfifo = 1; ///< Activate the flag to get the data from the NFC FIFO
+        }else {
+            printf("Something went wrong on RX_FULL - NFC_I2C_CALLBACK \n");
         }
         
         break;
@@ -158,4 +145,8 @@ void nfc_i2c_callback(nfc_rfid_t *nfc)
         printf("Happend what should not happens on I2C_HANDLER\n");
         break;
     }
+}
+
+void nfc_get_data_tag(nfc_rfid_t *nfc)
+{
 }

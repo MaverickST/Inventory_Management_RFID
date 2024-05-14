@@ -31,17 +31,16 @@ key_pad_t gKeyPad;
 nfc_rfid_t gNFC;
 inventory_t gInventory;
 
-uint8_t irq_nfc_pin = 20;
 bool gTag_entering = false; // Flag that indicates that a tag is being entered
 
-volatile flags_t gFlags; // Global variable that stores the flags of the interruptions pending
+flags_t gFlags; // Global variable that stores the flags of the interruptions pending
 
 void initGlobalVariables(void)
 {
     gFlags.W = 0x00U;
     led_init(gLed);
     kp_init(&gKeyPad, 2, 6, 100000, true);
-    // nfc_init_as_spi(&gNFC);
+    nfc_init_as_i2c(&gNFC, i2c1, 14, 15, 11);
     inventory_init(&gInventory, false);
 }
 
@@ -181,22 +180,23 @@ void program(void)
             break;
         }
     }
-    if(gFlags.B.nfc){
-            printf("Tag entering\n");
-            gFlags.B.nfc = 0;
-            /* Processs the tag ................
-            */
-
-        if (gNFC.userType == USER){
-            printf("User\n");
-            // Actually, it show in the display the tag information
-        }
+    if(gNFC.flags.B.nbf){
+        nfc_get_nbf(&gNFC); ///< Init the process to get the number of bytes in the NFC FIFO
+        gNFC.flags.B.nbf = 0;
+    }
+    if(gNFC.flags.B.dfifo){
+        nfc_get_data_fifo(&gNFC); ///< Init the proccess to get the data from the NFC FIFO
+        gNFC.flags.B.dfifo = 0;
+    }
+    if(gNFC.flags.B.dtag){
+        nfc_get_data_tag(&gNFC); ///< From the nfc fifo, get the data tag
+        gNFC.flags.B.dtag = 0;
     }
 }
 
 bool check()
 {
-    if(gFlags.W){
+    if(gFlags.W | gNFC.flags.W){
         return true;
     }
     return false;
@@ -209,13 +209,13 @@ void gpioCallback(uint num, uint32_t mask)
     case GPIO_IRQ_EDGE_RISE:
         // Just one tag can be entering at the same time
         if (num == gNFC.pinout.irq && !gTag_entering){
-            nfc_get_nbf(&gNFC); // Init the process to get the number of bytes in the NFC FIFO
+            gNFC.flags.B.nbf = 1; ///< Activate the flag to get the number of bytes in the NFC FIFO
             gTag_entering = true;
         }
         // If a tag is entering, the columns are captured
         else if (gTag_entering && !gKeyPad.KEY.dbnc){
-            gKeyPad.cols = gpio_get_all() & (0x0000000F << gKeyPad.KEY.clsb); // Get columns gpio values
-            kp_set_irq_rows(&gKeyPad); // Switch interrupt to rows
+            gKeyPad.cols = gpio_get_all() & (0x0000000F << gKeyPad.KEY.clsb); ///< Get columns gpio values
+            kp_set_irq_rows(&gKeyPad); ///< Switch interrupt to rows
         }
         else {
             printf("Happend what should not happens on GPIO_IRQ_EDGE_RISE\n");
@@ -224,7 +224,7 @@ void gpioCallback(uint num, uint32_t mask)
 
     case GPIO_IRQ_LEVEL_HIGH:
         if (!gKeyPad.KEY.dbnc){
-            gKeyPad.rows = gpio_get_all() & (0x0000000F << gKeyPad.KEY.rlsb); // Get rows gpio values
+            gKeyPad.rows = gpio_get_all() & (0x0000000F << gKeyPad.KEY.rlsb); ///< Get rows gpio values
             kp_dbnc_set_alarm(&gKeyPad);
         }
         break;
@@ -234,7 +234,7 @@ void gpioCallback(uint num, uint32_t mask)
         break;
     }
     
-    gpio_acknowledge_irq(num, mask); // gpio IRQ acknowledge
+    gpio_acknowledge_irq(num, mask); ///< gpio IRQ acknowledge
 }
 
 
@@ -243,17 +243,17 @@ void gpioCallback(uint num, uint32_t mask)
     // Interrupt acknowledge
     hw_clear_bits(&timer_hw->intr, 1u << TIMER_IRQ_1);
 
-    uint32_t rows = gpio_get_all() & (0x0000000f << gKeyPad.KEY.rlsb); // Get rows gpio values
+    uint32_t rows = gpio_get_all() & (0x0000000f << gKeyPad.KEY.rlsb); ///< Get rows gpio values
 
-    if (rows){ // If a key was pressed, set the alarm again
+    if (rows){ ///< If a key was pressed, set the alarm again
         irq_set_exclusive_handler(TIMER_IRQ_1, dbnc_timer_handler);
         irq_set_enabled(TIMER_IRQ_1, true);
-        hw_set_bits(&timer_hw->inte, 1u << TIMER_IRQ_1); // Enable alarm1 for keypad debouncer
-        timer_hw->alarm[1] = (uint32_t)(time_us_64() + gKeyPad.dbnc_time); // Set alarm1 to trigger in 100ms
+        hw_set_bits(&timer_hw->inte, 1u << TIMER_IRQ_1); ///< Enable alarm1 for keypad debouncer
+        timer_hw->alarm[1] = (uint32_t)(time_us_64() + gKeyPad.dbnc_time); ///< Set alarm1 to trigger in 100ms
     }else {
-        kp_set_irq_cols(&gKeyPad); // Switch interrupt to columns
+        kp_set_irq_cols(&gKeyPad); ///< Switch interrupt to columns
         gKeyPad.KEY.dbnc = 0;
-        gFlags.B.key = 1; // The key is processed once the debouncer is finished
+        gFlags.B.key = 1; ///< The key is processed once the debouncer is finished
     }
 }
 
