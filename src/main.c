@@ -68,16 +68,18 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <string.h>
 #include "pico/stdlib.h"
 #include "hardware/irq.h"
 #include "hardware/sync.h"
+#include "hardware/i2c.h"
 
 #include "functs.h"
 
 
 int main() {
     stdio_init_all();
-    printf("Hola!!!");
+    printf("Run Program\n");
 
     // Initialize global variables: keypad, signal generator, button, and DAC.
     initGlobalVariables();

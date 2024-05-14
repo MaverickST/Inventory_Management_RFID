@@ -24,10 +24,12 @@
 #include "functs.h"
 #include "keypad_irq.h"
 #include "gpio_led.h"
+#include "liquid_crystal_i2c.h"
 
 key_pad_t gKeyPad;
 signal_t gSignal;
 gpio_button_t gButton;
+lcd_t gLcd;
 dac_t gDac;
 uint8_t gLed = 18;
 
@@ -37,6 +39,7 @@ volatile flags_t gFlags; // Global variable that stores the flags of the interru
 
 void initGlobalVariables(void)
 {
+    lcd_init(&gLcd, 0x20, 16, 2, 100, 12, 13);
     gFlags.W = 0x00U;
     kp_init(&gKeyPad,2,6,true);
     signal_gen_init(&gSignal, 10, 1000, 500, true);
