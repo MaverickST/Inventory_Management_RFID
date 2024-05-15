@@ -20,12 +20,11 @@
 typedef union{
     uint8_t W;
     struct{
-        uint8_t key     :1; //keypad interruption pending
-        uint8_t tag     :1; //tag interruption pending
-        uint8_t admin   :1; //admin interruption pending
-        uint8_t inv     :1; //inventory interruption pending
-        uint8_t user    :1; //user interruption pending
-        uint8_t         :3;
+        uint8_t key         :1; //keypad interruption pending
+        uint8_t nfc         :1; //tag interruption pending
+        uint8_t kpad_cols   :1; //keypad cols interruption pending
+        uint8_t kpad_rows   :1; //keypad rows interruption pending
+        uint8_t             :3;
     }B;
 }flags_t;
 
@@ -50,7 +49,7 @@ void program(void);
 bool check();
 
 // -------------------------------------------------------------
-// ---------------------- Callback functions -------------------
+// ---------------- Callback and handler functions -------------
 // -------------------------------------------------------------
 
 /**
@@ -62,19 +61,16 @@ bool check();
 void gpioCallback(uint num, uint32_t mask);
 
 /**
- * @brief Definition of the keypad callback function, which will be called by the handler of the GPIO interruptions.
- * 
- * @param num 
- * @param mask 
- */
-void keypadCallback(uint num, uint32_t mask);
-
-
-/**
  * @brief Handler for the debouncer timer interruptions.
  * 
  */
 void dbnc_timer_handler(void);
+
+/**
+ * @brief Handler for the I2C interruptions.
+ * 
+ */
+void i2c_handler(void);
 
 // -------------------------------------------------------------
 // ---------------------- Check functions ----------------------
@@ -85,20 +81,9 @@ static inline bool checkNumber(uint8_t number){
 }
 
 static inline bool checkLetter(uint8_t letter){
-    return (letter >= 0x0A && letter <= 0x0C);
+    return (letter >= 0x0A && letter <= 0x0D);
 }
 
-static inline bool checkFreq(uint32_t freq){
-    return (freq >= 1 && freq <= 12000000);
-}
-
-static inline bool checkAmp(uint32_t amp){
-    return (amp >= 100 && amp <= 2500);
-}
-
-static inline bool checkOffset(uint32_t offset){
-    return (offset >= 50 && offset <= 1250);
-}
 
 #endif // FUNTCS
 

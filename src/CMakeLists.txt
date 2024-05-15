@@ -16,6 +16,8 @@ add_executable(invmanage
 	main.c
 	functs.c
 	keypad_irq.c
+	inventory.c
+	nfc_rfid.c
 	liquid_crystal_i2c.c
 )
 

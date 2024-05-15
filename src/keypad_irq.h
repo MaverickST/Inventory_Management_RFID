@@ -3,8 +3,8 @@
  * \brief
  * \details
  * \author      MST_CDA
- * \version     0.0.1
- * \date        05/10/2023
+ * \version     0.0.2
+ * \date        03/05/2024
  * \copyright   Unlicensed
  */
 
@@ -31,6 +31,9 @@ typedef struct{
     }KEY;                       ///< All key related information              
     uint8_t history[10];        ///< The last 10 pressed keys
     uint32_t dbnc_time;         ///< Debouncer time
+    uint32_t rows;              ///< Value of the gpios connected to the keypad rows
+    uint32_t cols;              ///< Value of the gpios connected to the keypad cols
+    uint8_t timer_irq;         ///< Alarm timer IRQ number
 }key_pad_t;
 
 
@@ -53,11 +56,8 @@ void kp_decode(key_pad_t *kpad);
 
 /**
  * \brief This method captures the currently pressed key. 
- * It should only be called when at lest one of the columns is different from zero
- * \param kpad      pointer to keypad data structure
- * \param cols      value of gpios masked to the gpios connected to the keypad columns
  */
-void kp_capture(key_pad_t *kpad, uint32_t cols, uint32_t rows);
+void kp_capture(key_pad_t *kpad);
 
 /**
  * @brief This method enables or disables the keypad IRQs
@@ -93,6 +93,11 @@ void kp_set_irq_cols(key_pad_t *kpad);
  */
 void kp_set_irq_rows(key_pad_t *kpad);
 
+/**
+ * @brief Configures an alarm for the keypad debouncer
+ * 
+ * @param kpad 
+ */
 void kp_dbnc_set_alarm(key_pad_t *kpad);
 
 /** 

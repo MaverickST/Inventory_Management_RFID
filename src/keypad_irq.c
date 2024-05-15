@@ -3,8 +3,8 @@
  * \brief
  * \details
  * \author      MST_CDA
- * \version     0.0.1
- * \date        05/10/2023
+ * \version     0.0.2
+ * \date        03/05/2024
  * \copyright   Unlicensed
  */
 #include <stdlib.h>
@@ -16,7 +16,6 @@
 #include "hardware/timer.h"
 
 #include "keypad_irq.h"
-
 #include "functs.h"
 
 uint32_t gDBNC_TIME;
@@ -37,8 +36,8 @@ void kp_init(key_pad_t *kpad, uint8_t rlsb, uint8_t clsb, uint32_t dbnc_time, bo
     kpad->dbnc_time = dbnc_time;
     gDBNC_TIME = dbnc_time;
     kpad->KEY.dzero = 0;
-    if(en)
-        kpad->KEY.en = 1;
+    kpad->KEY.en = en;
+    kpad->timer_irq = TIMER_IRQ_1;
 
     // Initialize keypad gpios
     gpio_init_mask(0x0000000F << kpad->KEY.rlsb); // gpios for key rows 2,3,4,5
@@ -102,11 +101,11 @@ void kp_decode(key_pad_t *kpad){
     
 }
 
-void kp_capture(key_pad_t *kpad, uint32_t cols, uint32_t rows){
+void kp_capture(key_pad_t *kpad){
 
     if (!kpad->KEY.en) return;
 
-    kpad->KEY.ckey = (cols >> 2) | (rows >> 2);
+    kpad->KEY.ckey = (kpad->cols >> 2) | (kpad->rows >> 2);
     kp_decode(kpad);
     for(int i=0;i<9;i++){
         kpad->history[9-i] = kpad->history[9-i-1];
@@ -171,10 +170,10 @@ void kp_dbnc_set_alarm(key_pad_t *kpad)
     hw_clear_bits(&timer_hw->intr, 1u << TIMER_IRQ_1);
 
     // Setting the IRQ handler
-    irq_set_exclusive_handler(TIMER_IRQ_1, dbnc_timer_handler);
-    irq_set_enabled(TIMER_IRQ_1, true);
-    hw_set_bits(&timer_hw->inte, 1u << TIMER_IRQ_1); // Enable alarm1 for keypad debouncer
-    timer_hw->alarm[1] = (uint32_t)(time_us_64() + gDBNC_TIME); // Set alarm1 to trigger in 100ms
+    irq_set_exclusive_handler(kpad->timer_irq, dbnc_timer_handler);
+    irq_set_enabled(kpad->timer_irq, true);
+    hw_set_bits(&timer_hw->inte, 1u << kpad->timer_irq); ///< Enable alarm1 for keypad debouncer
+    timer_hw->alarm[kpad->timer_irq] = (uint32_t)(time_us_64() + kpad->dbnc_time); ///< Set alarm1 to trigger in 100ms
 }
 
 
