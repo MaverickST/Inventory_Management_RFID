@@ -18,6 +18,7 @@ add_executable(invmanage
 	keypad_irq.c
 	inventory.c
 	nfc_rfid.c
+	liquid_crystal_i2c.c
 )
 
 target_include_directories(invmanage PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
