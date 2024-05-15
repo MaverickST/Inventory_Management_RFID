@@ -79,17 +79,17 @@
  * 
  */
 typedef struct{
-    uint8_t addr;       // I2C address of the LCD
-    uint8_t cols;       // Number of columns in the LCD
-    uint8_t rows;       // Number of rows in the LCD
-    uint8_t backlight;  // Backlight state
-    i2c_inst_t *i2c;    // I2C HW block
-    uint16_t baudrate;  // Baudrate in kHz for I2C communication
-    uint8_t sda;        // SDA pin
-    uint8_t scl;        // SCL pin
-    uint8_t display;    // Display state
-    uint8_t cursor;     // Cursor state
-    char *temp_message; // Temporary message buffer
+    uint8_t addr;       ///< I2C address of the LCD
+    uint8_t cols;       ///< Number of columns in the LCD
+    uint8_t rows;       ///< Number of rows in the LCD
+    uint8_t backlight;  ///< Backlight state
+    i2c_inst_t *i2c;    ///< I2C HW block
+    uint16_t baudrate;  ///< Baudrate in kHz for I2C communication
+    uint8_t sda;        ///< SDA pin
+    uint8_t scl;        ///< SCL pin
+    uint8_t display;    ///< Display state
+    uint8_t cursor;     ///< Cursor state
+    char *temp_message; ///< Temporary message buffer
 }lcd_t;
 
 /**
@@ -97,6 +97,7 @@ typedef struct{
  * 
  * @param lcd Pointer to the LCD structure
  * @param addr Address of the I2C device 
+ * @param i2c I2C instance
  * @param cols Number of columns
  * @param rows Number of rows
  * @param baudrate Frequency of the I2C communication in kHz

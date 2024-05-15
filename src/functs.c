@@ -33,13 +33,13 @@ key_pad_t gKeyPad;
 nfc_rfid_t gNFC;
 inventory_t gInventory;
 
-bool gTag_entering = false; // Flag that indicates that a tag is being entered
+bool gTag_entering = false; ///< Flag that indicates that a tag is being entered
 
-flags_t gFlags; // Global variable that stores the flags of the interruptions pending
+flags_t gFlags; ///< Global variable that stores the flags of the interruptions pending
 
 void initGlobalVariables(void)
 {
-    lcd_init(&gLcd, 0x20, 16, 2, 100, 12, 13);
+    lcd_init(&gLcd, 0x20, i2c0, 16, 2, 100, 12, 13);
     gFlags.W = 0x00U;
     led_init(gLed);
     kp_init(&gKeyPad, 2, 6, 100000, true);
@@ -67,7 +67,7 @@ void program(void)
 
         switch (gNFC.userType)
         {
-        case ADMIN: // Admin is entering
+        case ADMIN: ///< Admin is entering
             if (checkNumber(key) && in_state_admin == adminNONE){
                 in_value = in_value*10 + key;
                 in_cont++;
@@ -84,11 +84,11 @@ void program(void)
                     }
                 }
             }
-            // Reset the inventory database
+            ///< Reset the inventory database
             else if (key == 0x0E && in_state_admin == PASS) {
                 inventory_reset(&gInventory);
             }
-            // Finish the process
+            ///< Finish the process
             else if (key == 0x0D){
                 printf("Finished Admin process\n");
                 gTag_entering = false;
@@ -102,8 +102,8 @@ void program(void)
             
             break;
             
-        case INV: // Inventory management user is entering
-            // Select the type of data to enter
+        case INV: ///< Inventory management user is entering
+            ///< Select the type of data to enter
             if ((key >= 0x0A && key <= 0x0C) && in_state_inv == inNONE) {
                 switch (key)
                 {
@@ -120,21 +120,21 @@ void program(void)
                     break;
                 }
             }
-            // Select the ID of the product
+            ///< Select the ID of the product
             else if (checkNumber(key) && in_state_inv != inNONE && id_state_inv == idNONE){
                 if (key >= 0x01 && key <=0x05) {
                     gNFC.tag.id = key;
                     id_state_inv = key;
                 }else {
                     printf("Invalid ID\n");
-                    in_state_inv = inNONE; // Reset the state machine
+                    in_state_inv = inNONE; ///< Reset the state machine
                 }
             }
-            // Enter the value of the data
+            ///< Enter the value of the data
             else if (checkNumber(key) && in_state_inv != inNONE && id_state_inv != idNONE){
                 in_value = in_value*10 + key;
             }
-            // Update the database
+            ///< Update the database
             else if (key == 0x0D && in_state_inv != inNONE && id_state_inv != idNONE){
                 switch (in_state_inv)
                 {
@@ -162,26 +162,26 @@ void program(void)
             }
             else {
                 printf("Invalid key\n");
-                in_state_inv = inNONE; // Reset the state machine
+                in_state_inv = inNONE; ///< Reset the state machine
                 id_state_inv = idNONE;
                 in_value = 0;
             }
             break;
 
-        case USER: // User is entering
-            // Input transaction
+        case USER: ///< User is entering
+            ///< Input transaction
             if (key == 0x0A) {
                 inventory_in_transaction(&gInventory, 
                     gNFC.tag.id, gNFC.tag.amount, gNFC.tag.purchase_v, gNFC.tag.sale_v);
                 ///< It is missing to show the data of the transaction on the screen
             }
-            // Output transaction
+            ///< Output transaction
             else if (key == 0x0B) {
                 inventory_out_transaction(&gInventory, 
                     gNFC.tag.id, gNFC.tag.amount, gNFC.tag.purchase_v, gNFC.tag.sale_v);
                 ///< It is missing to show the data of the transaction on the screen
             }
-            // Finish the process
+            ///< Finish the process
             else if (key == 0x0D) {
                 gTag_entering = false;
                 printf("Finished User\n");
@@ -266,7 +266,7 @@ void gpioCallback(uint num, uint32_t mask)
 
  void dbnc_timer_handler(void)
 {
-    // Interrupt acknowledge
+    ///< Interrupt acknowledge
     hw_clear_bits(&timer_hw->intr, 1u << TIMER_IRQ_1);
 
     uint32_t rows = gpio_get_all() & (0x0000000f << gKeyPad.KEY.rlsb); ///< Get rows gpio values
@@ -285,12 +285,12 @@ void i2c_handler(void)
     // Check for an abort condition
     uint32_t abort_reason = gNFC.i2c->hw->tx_abrt_source;
     if (abort_reason){
-        // Note clearing the abort flag also clears the reason, and
-        // this instance of flag is clear-on-read! Note also the
-        // IC_CLR_TX_ABRT register always reads as 0.
+        ///< Note clearing the abort flag also clears the reason, and
+        ///< this instance of flag is clear-on-read! Note also the
+        ///< IC_CLR_TX_ABRT register always reads as 0.
         gNFC.i2c->hw->clr_tx_abrt;
         printf("Config - I2C abort reason: %08x\n", abort_reason);
-        // nfc_config_mfrc522_irq(&gNFC);
+        ///< nfc_config_mfrc522_irq(&gNFC);
         gNFC.i2c_fifo_stat.tx = 0;
         return;
     }
@@ -299,6 +299,6 @@ void i2c_handler(void)
         nfc_i2c_callback(&gNFC);
     }
 
-    // Clear the interrupt
+    ///< Clear the interrupt
     gNFC.i2c->hw->clr_intr;
 }
