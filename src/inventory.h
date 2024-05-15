@@ -74,4 +74,14 @@ void inventory_in_transaction(inventory_t *inv, uint8_t id, uint32_t amount, uin
  */
 void inventory_out_transaction(inventory_t *inv, uint8_t id, uint32_t amount, uint32_t purchase_v, uint32_t sale_v);
 
+static inline void inventory_reset(inventory_t *inv)
+{
+    for (int i = 0; i < 5; i++){
+        for (int j = 0; j < 3; j++){
+            inv->database[i][j] = 0;
+        }
+    }
+    inventory_store(inv);
+}
+
 #endif // __INVENTORY_

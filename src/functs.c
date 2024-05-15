@@ -83,10 +83,11 @@ void program(void)
             }
             // Reset the inventory database
             else if (key == 0x0E && in_state_admin == PASS) {
-                printf("Reset inventory database\n"); // Actually, it should reset an inventory database
+                inventory_reset(&gInventory);
             }
+            // Finish the process
             else if (key == 0x0D){
-                printf("Finished\n");
+                printf("Finished Admin process\n");
                 gTag_entering = false;
                 in_state_admin = adminNONE;
                 in_value = 0;
@@ -146,7 +147,7 @@ void program(void)
                 default:
                     break;
                 }
-                // inventory_store(&gInventory);
+                inventory_store(&gInventory);
                 in_state_inv = inNONE; // Reset the state machine
                 id_state_inv = idNONE;
                 in_value = 0;
@@ -154,7 +155,7 @@ void program(void)
             // Finish the process
             else if (key == 0x0D && in_state_inv == inNONE && id_state_inv == idNONE) {
                 gTag_entering = false;
-                printf("Finished \n");
+                printf("Finished Inv User\n");
             }
             else {
                 printf("Invalid key\n");
@@ -162,17 +163,28 @@ void program(void)
                 id_state_inv = idNONE;
                 in_value = 0;
             }
-            
             break;
 
         case USER: // User is entering
             // Input transaction
             if (key == 0x0A) {
-                inventory_in_transaction(&gInventory, gNFC.tag.id, gNFC.tag.amount, gNFC.tag.purchase_v, gNFC.tag.sale_v);
+                inventory_in_transaction(&gInventory, 
+                    gNFC.tag.id, gNFC.tag.amount, gNFC.tag.purchase_v, gNFC.tag.sale_v);
+                ///< It is missing to show the data of the transaction on the screen
             }
             // Output transaction
             else if (key == 0x0B) {
-                inventory_out_transaction(&gInventory, gNFC.tag.id, gNFC.tag.amount, gNFC.tag.purchase_v, gNFC.tag.sale_v);
+                inventory_out_transaction(&gInventory, 
+                    gNFC.tag.id, gNFC.tag.amount, gNFC.tag.purchase_v, gNFC.tag.sale_v);
+                ///< It is missing to show the data of the transaction on the screen
+            }
+            // Finish the process
+            else if (key == 0x0D) {
+                gTag_entering = false;
+                printf("Finished User\n");
+            }
+            else {
+                printf("Invalid key\n");
             }
             break;
 
