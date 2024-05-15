@@ -53,13 +53,6 @@ void inventory_load(inventory_t *inv)
     uint32_t addr = XIP_BASE +  FLASH_TARGET_OFFSET;
     uint32_t *ptr = (uint32_t *)addr; // Place an int pointer at our memory-mapped address
 
-    // // Copy the data from the flash memory to the inventory_t structure
-    // for (int i = 0; i < 5; i++){
-    //     for (int j = 0; j < 3; j++){
-    //         inv->database[i][j] = ptr[i*3 + j];
-    //     }
-    // }
-
     // Get a free channel, panic() if there are none
     int chan = dma_claim_unused_channel(true);
 
@@ -73,11 +66,32 @@ void inventory_load(inventory_t *inv)
     channel_config_set_write_increment(&c, true);
 
     dma_channel_configure(
-        chan,          // Channel to be configured
-        &c,            // The configuration we just created
-        &inv->database[0],           // The initial write address
-        ptr,           // The initial read address
-        count_of(inv->database), // Number of transfers; in this case each is 1 byte.
-        true           // Start immediately.
+        chan,               ///< Channel to be configured
+        &c,                 ///< The configuration we just created
+        &inv->database[0],  ///< The initial write address
+        ptr,                ///< The initial read address
+        count_of(inv->database), ///< Number of transfers; in this case each is 1 byte.
+        true                ///< Start immediately.
     );
+}
+
+void inventory_in_transaction(inventory_t *inv, uint8_t id, uint32_t amount, uint32_t purchase_v, uint32_t sale_v)
+{
+    inv->database[id][0] += amount;
+    inv->database[id][1] += purchase_v;
+    inv->database[id][2] += sale_v;
+}
+
+void inventory_out_transaction(inventory_t *inv, uint8_t id, uint32_t amount, uint32_t purchase_v, uint32_t sale_v)
+{
+    if (inv->database[id][0] < amount) {
+        printf("Not enough stock\n");
+        return;
+    }
+    else {
+        inv->database[id][0] -= amount;
+        inv->database[id][1] -= purchase_v;
+        inv->database[id][2] -= sale_v;
+    
+    }
 }

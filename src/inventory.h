@@ -50,4 +50,28 @@ void inventory_store(inventory_t *inv);
  */
 void inventory_load(inventory_t *inv);
 
+/**
+ * @brief Perform a inbound transaction.
+ * The parameters are each of the values stored in the tag.
+ * 
+ * @param inv 
+ * @param id 
+ * @param amount 
+ * @param purchase_v 
+ * @param sale_v 
+ */
+void inventory_in_transaction(inventory_t *inv, uint8_t id, uint32_t amount, uint32_t purchase_v, uint32_t sale_v);
+
+/**
+ * @brief Perform a outbound transaction.
+ * The parameters are each of the values stored in the tag.
+ * 
+ * @param inv 
+ * @param id 
+ * @param amount 
+ * @param purchase_v 
+ * @param sale_v 
+ */
+void inventory_out_transaction(inventory_t *inv, uint8_t id, uint32_t amount, uint32_t purchase_v, uint32_t sale_v);
+
 #endif // __INVENTORY_

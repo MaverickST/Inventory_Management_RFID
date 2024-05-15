@@ -46,7 +46,7 @@ void initGlobalVariables(void)
 
 void program(void)
 {
-    if(gFlags.B.key){
+    if (gFlags.B.key){
         kp_capture(&gKeyPad);
         gFlags.B.key = 0;
 
@@ -168,11 +168,11 @@ void program(void)
         case USER: // User is entering
             // Input transaction
             if (key == 0x0A) {
-
+                inventory_in_transaction(&gInventory, gNFC.tag.id, gNFC.tag.amount, gNFC.tag.purchase_v, gNFC.tag.sale_v);
             }
             // Output transaction
             else if (key == 0x0B) {
-
+                inventory_out_transaction(&gInventory, gNFC.tag.id, gNFC.tag.amount, gNFC.tag.purchase_v, gNFC.tag.sale_v);
             }
             break;
 
@@ -180,17 +180,27 @@ void program(void)
             break;
         }
     }
-    if(gNFC.flags.B.nbf){
+    ///< NFC interrupt flags
+    if (gNFC.flags.B.nbf){
         nfc_get_nbf(&gNFC); ///< Init the process to get the number of bytes in the NFC FIFO
         gNFC.flags.B.nbf = 0;
     }
-    if(gNFC.flags.B.dfifo){
+    if (gNFC.flags.B.dfifo){
         nfc_get_data_fifo(&gNFC); ///< Init the proccess to get the data from the NFC FIFO
         gNFC.flags.B.dfifo = 0;
     }
-    if(gNFC.flags.B.dtag){
+    if (gNFC.flags.B.dtag){
         nfc_get_data_tag(&gNFC); ///< From the nfc fifo, get the data tag
         gNFC.flags.B.dtag = 0;
+    }
+    ///< Keypad interrupt flags
+    if (gFlags.B.kpad_rows){
+        kp_set_irq_rows(&gKeyPad); ///< Switch interrupt to rows
+        gFlags.B.kpad_rows = 0;
+    }
+    if (gFlags.B.kpad_cols){
+        kp_set_irq_cols(&gKeyPad); ///< Switch interrupt to columns
+        gFlags.B.kpad_cols = 0;
     }
 }
 
@@ -215,7 +225,7 @@ void gpioCallback(uint num, uint32_t mask)
         // If a tag is entering, the columns are captured
         else if (gTag_entering && !gKeyPad.KEY.dbnc){
             gKeyPad.cols = gpio_get_all() & (0x0000000F << gKeyPad.KEY.clsb); ///< Get columns gpio values
-            kp_set_irq_rows(&gKeyPad); ///< Switch interrupt to rows
+            gFlags.B.kpad_rows = 1; ///< Activate the flag to switch the keypad interruption to rows
         }
         else {
             printf("Happend what should not happens on GPIO_IRQ_EDGE_RISE\n");
@@ -225,6 +235,7 @@ void gpioCallback(uint num, uint32_t mask)
     case GPIO_IRQ_LEVEL_HIGH:
         if (!gKeyPad.KEY.dbnc){
             gKeyPad.rows = gpio_get_all() & (0x0000000F << gKeyPad.KEY.rlsb); ///< Get rows gpio values
+            gKeyPad.KEY.dbnc = 1;            
             kp_dbnc_set_alarm(&gKeyPad);
         }
         break;
@@ -246,14 +257,11 @@ void gpioCallback(uint num, uint32_t mask)
     uint32_t rows = gpio_get_all() & (0x0000000f << gKeyPad.KEY.rlsb); ///< Get rows gpio values
 
     if (rows){ ///< If a key was pressed, set the alarm again
-        irq_set_exclusive_handler(TIMER_IRQ_1, dbnc_timer_handler);
-        irq_set_enabled(TIMER_IRQ_1, true);
-        hw_set_bits(&timer_hw->inte, 1u << TIMER_IRQ_1); ///< Enable alarm1 for keypad debouncer
-        timer_hw->alarm[1] = (uint32_t)(time_us_64() + gKeyPad.dbnc_time); ///< Set alarm1 to trigger in 100ms
+        kp_dbnc_set_alarm(&gKeyPad);
     }else {
-        kp_set_irq_cols(&gKeyPad); ///< Switch interrupt to columns
         gKeyPad.KEY.dbnc = 0;
         gFlags.B.key = 1; ///< The key is processed once the debouncer is finished
+        gFlags.B.kpad_cols = 1; ///< Activate the flag to  switch interrupt to columns
     }
 }
 
