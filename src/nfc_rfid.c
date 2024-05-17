@@ -63,10 +63,11 @@ void nfc_init_as_i2c(nfc_rfid_t *nfc, i2c_inst_t *_i2c, uint8_t sda, uint8_t scl
 void nfc_i2c_callback(nfc_rfid_t *nfc)
 {
     uint8_t regVal = 0;
+    printf("NFC callback: %08x\n", nfc->i2c->hw->raw_intr_stat);
     switch (nfc->i2c->hw->raw_intr_stat)
     {
     case I2C_IC_RAW_INTR_STAT_TX_EMPTY_BITS:
-        // printf("TX_EMPTY\n");
+        printf("TX_EMPTY\n");
         switch (nfc->i2c_fifo_stat.tx)
         {
         case dev_ADDRESS: ///< Device address was sent
@@ -102,7 +103,7 @@ void nfc_i2c_callback(nfc_rfid_t *nfc)
 
         case data_SENT: ///< Data was sent
             if (!nfc->i2c_fifo_stat.rw){ ///< Single write
-                // printf("Initial configuration of NFC finished\n");
+                printf("Initial configuration of NFC finished\n");
                 irq_set_enabled(nfc->i2c_irq, false); ///< The initial configuration to NFC is finished
                 nfc->i2c->hw->enable = false; ///< Disable the DW_apb_i2c
             }

@@ -25,9 +25,9 @@
 #include "gpio_led.h"
 #include "nfc_rfid.h"
 #include "inventory.h"
-#include "liquid_crystal_i2c.h"
+// #include "liquid_crystal_i2c.h"
 
-lcd_t gLcd;
+// lcd_t gLcd;
 uint8_t gLed = 18;
 key_pad_t gKeyPad;
 nfc_rfid_t gNFC;
@@ -39,7 +39,7 @@ flags_t gFlags; ///< Global variable that stores the flags of the interruptions 
 
 void initGlobalVariables(void)
 {
-    lcd_init(&gLcd, 0x20, i2c0, 16, 2, 100, 12, 13);
+    // lcd_init(&gLcd, 0x20, i2c0, 16, 2, 100, 12, 13);
     gFlags.W = 0x00U;
     led_init(gLed);
     kp_init(&gKeyPad, 2, 6, 100000, true);
@@ -54,7 +54,7 @@ void program(void)
         gFlags.B.key = 0;
 
         uint8_t key = gKeyPad.KEY.dkey;
-        // printf("Key: %d\n", key);
+        printf("Key: %d\n", key);
         static uint32_t in_value = 0;
         static uint8_t in_cont = 0;
 

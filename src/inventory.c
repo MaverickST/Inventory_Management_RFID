@@ -16,6 +16,7 @@
 #include "pico/stdlib.h"
 #include "hardware/flash.h"
 #include "hardware/dma.h"
+#include "pico/flash.h"
 
 #include "inventory.h"
 
@@ -40,6 +41,9 @@ void inventory_store(inventory_t *inv)
     }
     // Program buf[] into the first page of this sector
     // Each page is 256 bytes, and each sector is 4K bytes
+    // Erase the last sector of the flash
+    flash_safe_execute(invetory_wrapper, NULL, 500);
+
     uint32_t ints = save_and_disable_interrupts();
     flash_range_program(FLASH_TARGET_OFFSET, (uint8_t *)buf, FLASH_PAGE_SIZE);
     restore_interrupts (ints);
@@ -65,6 +69,11 @@ void inventory_load(inventory_t *inv)
             inv->database[i][j] = ptr[i*3 + j];
         }
     }
+}
+
+void invetory_wrapper()
+{
+    flash_range_erase((PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE), FLASH_SECTOR_SIZE);
 }
 
 void inventory_print_data(uint32_t *data)

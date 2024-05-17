@@ -132,6 +132,7 @@ static inline void nfc_get_data_fifo(nfc_rfid_t *nfc)
     nfc->i2c_fifo_stat.tx = dev_ADDRESS;
 }
 
+
 // MFRC522 registers. Described in chapter 9 of the datasheet.
 // When using SPI all addresses are shifted one bit left in the "SPI address byte" (section 8.1.2.3)
 enum {

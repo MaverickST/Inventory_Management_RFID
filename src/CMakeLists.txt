@@ -25,7 +25,8 @@ target_include_directories(invmanage PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 # Add pico_stdlib library which aggregates commonly used features
 target_link_libraries(invmanage 
-	pico_stdlib 
+	pico_stdlib
+	pico_flash
 	hardware_timer
 	pico_cyw43_arch_none 
 	hardware_gpio 
