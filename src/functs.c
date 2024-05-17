@@ -28,7 +28,7 @@
 // #include "liquid_crystal_i2c.h"
 
 // lcd_t gLcd;
-uint8_t gLed = 18;
+led_rgb_t gLed;
 key_pad_t gKeyPad;
 nfc_rfid_t gNFC;
 inventory_t gInventory;
@@ -41,7 +41,7 @@ void initGlobalVariables(void)
 {
     // lcd_init(&gLcd, 0x20, i2c0, 16, 2, 100, 12, 13);
     gFlags.W = 0x00U;
-    led_init(gLed);
+    led_init(&gLed, 18);
     kp_init(&gKeyPad, 2, 6, 100000, true);
     nfc_init_as_i2c(&gNFC, i2c1, 14, 15, 11);
     inventory_init(&gInventory, false);
@@ -76,18 +76,24 @@ void program(void)
                     if (in_value == 1234){
                         in_state_admin = PASS;
                         printf("Correct password\n");
+                        // Led control
+                        led_setup(&gLed, 0x05); ///< Purple color
                     }else {
                         printf("Incorrect password\n");
                         gTag_entering = false;
                         in_state_admin = adminNONE;
                         in_value = 0;
                         in_cont = 0;
+                        // Led control
+                        led_setup(&gLed, 0x04); ///< Red color
                     }
                 }
             }
             ///< Reset the inventory database
             else if (key == 0x0E && in_state_admin == PASS) {
                 inventory_reset(&gInventory);
+                // Led control
+                led_setup(&gLed, 0x03); ///< Blue color
             }
             ///< Finish the process
             else if (key == 0x0D){
@@ -96,9 +102,13 @@ void program(void)
                 in_state_admin = adminNONE;
                 in_value = 0;
                 in_cont = 0;
+                // Led control
+                led_setup(&gLed, 0x06); ///< Yellow color
             }
             else {
                 printf("Invalid key - ADMIN\n");
+                // Led control
+                led_setup(&gLed, 0x04); ///< Red color
             }
             
             break;
@@ -129,6 +139,8 @@ void program(void)
                 }else {
                     printf("Invalid ID\n");
                     in_state_inv = inNONE; ///< Reset the state machine
+                    // Led control
+                    led_setup(&gLed, 0x04); ///< Red color
                 }
             }
             ///< Enter the value of the data
@@ -156,17 +168,24 @@ void program(void)
                 in_state_inv = inNONE; // Reset the state machine
                 id_state_inv = idNONE;
                 in_value = 0;
+                // Led control
+                led_setup(&gLed, 0x02); ///<  Green color
+
             }
             // Finish the process
             else if (key == 0x0D && in_state_inv == inNONE && id_state_inv == idNONE) {
                 gTag_entering = false;
                 printf("Finished Inv User\n");
+                // Led control
+                led_setup(&gLed, 0x06); ///< Yellow color
             }
             else {
                 printf("Invalid key - INV\n");
                 in_state_inv = inNONE; ///< Reset the state machine
                 id_state_inv = idNONE;
                 in_value = 0;
+                // Led control
+                led_setup(&gLed, 0x04); ///< Red color
             }
             break;
 
@@ -187,9 +206,13 @@ void program(void)
             else if (key == 0x0D) {
                 gTag_entering = false;
                 printf("Finished User\n");
+                // Led control
+                led_setup(&gLed, 0x06); ///< Yellow color
             }
             else {
                 printf("Invalid key - USER\n");
+                // Led control
+                led_setup(&gLed, 0x04); ///< Red color
             }
             break;
 
@@ -275,6 +298,19 @@ void gpioCallback(uint num, uint32_t mask)
         gFlags.B.key = 1; ///< The key is processed once the debouncer is finished
         kp_set_irq_cols(&gKeyPad); ///< Switch interrupt to columns
         irq_set_enabled(gKeyPad.timer_irq, false); ///< Disable the debouncer timer
+    }
+}
+
+void led_timer_handler(void)
+{
+    // Set the alarm
+    hw_clear_bits(&timer_hw->intr, 1u << TIMER_IRQ_0);
+
+    if (gLed.state){
+        led_set_alarm(&gLed);
+    }else {
+        led_off(&gLed);
+        irq_set_enabled(TIMER_IRQ_0, false); ///< Disable the led timer
     }
 }
 

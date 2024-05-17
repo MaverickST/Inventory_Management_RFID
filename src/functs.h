@@ -67,6 +67,12 @@ void gpioCallback(uint num, uint32_t mask);
 void dbnc_timer_handler(void);
 
 /**
+ * @brief Handler for the led timer interruptions.
+ * 
+ */
+void led_timer_handler(void);
+
+/**
  * @brief Handler for the I2C interruptions.
  * 
  */

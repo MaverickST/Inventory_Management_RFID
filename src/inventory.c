@@ -51,17 +51,13 @@ void inventory_store(inventory_t *inv)
     // Prints
     printf("\nStored data in flash\n");
     inventory_print_data(buf);
-
-    printf("Loaded data from flash\n");
-    inventory_load(inv);
-    inventory_print_data(inv->database[0]);
 }
 
 void inventory_load(inventory_t *inv)
 {
     // Compute the memory-mapped address, remembering to include the offset for RAM
     uint32_t addr = XIP_BASE +  FLASH_TARGET_OFFSET;
-    uint32_t *ptr = (uint32_t *)addr; // Place an int pointer at our memory-mapped address
+    uint32_t *ptr = (uint32_t *)addr; ///< Place an int pointer at our memory-mapped address
 
     // Load the inventory from the flash memory
     for (int i = 0; i < 5; i++){
