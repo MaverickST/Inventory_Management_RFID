@@ -79,6 +79,7 @@
 
 int main() {
     stdio_init_all();
+    sleep_ms(5000);
     printf("Run Program\n");
 
     // Initialize global variables: keypad, signal generator, button, and DAC.

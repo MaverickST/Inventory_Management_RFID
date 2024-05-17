@@ -33,7 +33,7 @@ key_pad_t gKeyPad;
 nfc_rfid_t gNFC;
 inventory_t gInventory;
 
-bool gTag_entering = false; ///< Flag that indicates that a tag is being entered
+bool gTag_entering = true; ///< Flag that indicates that a tag is being entered
 
 flags_t gFlags; ///< Global variable that stores the flags of the interruptions pending
 
@@ -54,6 +54,7 @@ void program(void)
         gFlags.B.key = 0;
 
         uint8_t key = gKeyPad.KEY.dkey;
+        // printf("Key: %d\n", key);
         static uint32_t in_value = 0;
         static uint8_t in_cont = 0;
 
@@ -97,7 +98,7 @@ void program(void)
                 in_cont = 0;
             }
             else {
-                printf("Invalid key\n");
+                printf("Invalid key - ADMIN\n");
             }
             
             break;
@@ -136,6 +137,7 @@ void program(void)
             }
             ///< Update the database
             else if (key == 0x0D && in_state_inv != inNONE && id_state_inv != idNONE){
+                printf("Updating database   value: %d    id: %d   type: %d\n", in_value, id_state_inv, in_state_inv);
                 switch (in_state_inv)
                 {
                 case AMOUNT:
@@ -161,7 +163,7 @@ void program(void)
                 printf("Finished Inv User\n");
             }
             else {
-                printf("Invalid key\n");
+                printf("Invalid key - INV\n");
                 in_state_inv = inNONE; ///< Reset the state machine
                 id_state_inv = idNONE;
                 in_value = 0;
@@ -187,7 +189,7 @@ void program(void)
                 printf("Finished User\n");
             }
             else {
-                printf("Invalid key\n");
+                printf("Invalid key - USER\n");
             }
             break;
 
@@ -214,7 +216,11 @@ void program(void)
         gFlags.B.kpad_rows = 0;
     }
     if (gFlags.B.kpad_cols){
-        kp_set_irq_cols(&gKeyPad); ///< Switch interrupt to columns
+        gKeyPad.cols = gpio_get_all() & (0x0000000f << gKeyPad.KEY.clsb); ///< Get columns gpio values
+        kp_set_irq_rows(&gKeyPad); ///< Switch interrupt to columns
+        gKeyPad.rows = gpio_get_all() & (0x0000000f << gKeyPad.KEY.rlsb); ///< Get rows gpio values
+        gKeyPad.KEY.dbnc = 1; ///< Activate the debouncer
+        kp_dbnc_set_alarm(&gKeyPad); ///< Set the debouncer alarm
         gFlags.B.kpad_cols = 0;
     }
 }
@@ -236,22 +242,15 @@ void gpioCallback(uint num, uint32_t mask)
         if (num == gNFC.pinout.irq && !gTag_entering){
             gNFC.flags.B.nbf = 1; ///< Activate the flag to get the number of bytes in the NFC FIFO
             gTag_entering = true;
+            printf("Tag entering\n");
         }
         // If a tag is entering, the columns are captured
         else if (gTag_entering && !gKeyPad.KEY.dbnc){
-            gKeyPad.cols = gpio_get_all() & (0x0000000F << gKeyPad.KEY.clsb); ///< Get columns gpio values
-            gFlags.B.kpad_rows = 1; ///< Activate the flag to switch the keypad interruption to rows
+            kp_set_irq_enabled(&gKeyPad, true, false); ///< Disable the columns interrupt
+            gFlags.B.kpad_cols = 1; ///< Activate the flag to switch the interrupt to columns
         }
         else {
-            printf("Happend what should not happens on GPIO_IRQ_EDGE_RISE\n");
-        }
-        break;
-
-    case GPIO_IRQ_LEVEL_HIGH:
-        if (!gKeyPad.KEY.dbnc){
-            gKeyPad.rows = gpio_get_all() & (0x0000000F << gKeyPad.KEY.rlsb); ///< Get rows gpio values
-            gKeyPad.KEY.dbnc = 1;            
-            kp_dbnc_set_alarm(&gKeyPad);
+            printf("There is no a tag entering \n");
         }
         break;
     
@@ -263,20 +262,19 @@ void gpioCallback(uint num, uint32_t mask)
     gpio_acknowledge_irq(num, mask); ///< gpio IRQ acknowledge
 }
 
-
  void dbnc_timer_handler(void)
 {
     ///< Interrupt acknowledge
-    hw_clear_bits(&timer_hw->intr, 1u << TIMER_IRQ_1);
+    hw_clear_bits(&timer_hw->intr, 1u << gKeyPad.timer_irq);
 
     uint32_t rows = gpio_get_all() & (0x0000000f << gKeyPad.KEY.rlsb); ///< Get rows gpio values
-
     if (rows){ ///< If a key was pressed, set the alarm again
         kp_dbnc_set_alarm(&gKeyPad);
     }else {
         gKeyPad.KEY.dbnc = 0;
         gFlags.B.key = 1; ///< The key is processed once the debouncer is finished
-        gFlags.B.kpad_cols = 1; ///< Activate the flag to  switch interrupt to columns
+        kp_set_irq_cols(&gKeyPad); ///< Switch interrupt to columns
+        irq_set_enabled(gKeyPad.timer_irq, false); ///< Disable the debouncer timer
     }
 }
 
@@ -294,7 +292,7 @@ void i2c_handler(void)
         gNFC.i2c_fifo_stat.tx = 0;
         return;
     }
-
+    // printf("I2C handler: %08x \n", gNFC.i2c->hw->raw_intr_stat);
     if (gNFC.i2c->hw->raw_intr_stat){
         nfc_i2c_callback(&gNFC);
     }

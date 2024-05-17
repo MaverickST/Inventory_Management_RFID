@@ -50,6 +50,8 @@ void inventory_store(inventory_t *inv);
  */
 void inventory_load(inventory_t *inv);
 
+void inventory_print_data(uint32_t *data);
+
 /**
  * @brief Perform a inbound transaction.
  * The parameters are each of the values stored in the tag.

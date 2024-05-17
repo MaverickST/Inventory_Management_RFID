@@ -25,7 +25,7 @@ void nfc_init_as_i2c(nfc_rfid_t *nfc, i2c_inst_t *_i2c, uint8_t sda, uint8_t scl
     nfc->i2c_fifo_stat.tx = 0;
     nfc->nbf = 0;
     nfc->idx_fifo = 0;
-    nfc->userType = NONE;
+    nfc->userType = INV;
 
     nfc->i2c = _i2c;
     if (_i2c == i2c0){
@@ -66,7 +66,7 @@ void nfc_i2c_callback(nfc_rfid_t *nfc)
     switch (nfc->i2c->hw->raw_intr_stat)
     {
     case I2C_IC_RAW_INTR_STAT_TX_EMPTY_BITS:
-        printf("TX_EMPTY\n");
+        // printf("TX_EMPTY\n");
         switch (nfc->i2c_fifo_stat.tx)
         {
         case dev_ADDRESS: ///< Device address was sent
@@ -102,7 +102,7 @@ void nfc_i2c_callback(nfc_rfid_t *nfc)
 
         case data_SENT: ///< Data was sent
             if (!nfc->i2c_fifo_stat.rw){ ///< Single write
-                printf("Initial configuration of NFC finished\n");
+                // printf("Initial configuration of NFC finished\n");
                 irq_set_enabled(nfc->i2c_irq, false); ///< The initial configuration to NFC is finished
                 nfc->i2c->hw->enable = false; ///< Disable the DW_apb_i2c
             }
@@ -131,10 +131,11 @@ void nfc_i2c_callback(nfc_rfid_t *nfc)
             }
         }
         else if (nfc->i2c_fifo_stat.rw == single_READ){ ///< Single read: read number of bytes
+            printf("Number of bytes in the NFC FIFO: %d\n", nfc->i2c->hw->data_cmd);
             nfc->nbf = (uint8_t)nfc->i2c->hw->data_cmd;
             irq_set_enabled(nfc->i2c_irq, false); ///< The reading of the number of bytes is finished
             nfc->i2c->hw->enable = false; ///< Disable the DW_apb_i2c
-            nfc->flags.B.dfifo = 1; ///< Activate the flag to get the data from the NFC FIFO
+            // nfc->flags.B.dfifo = 1; ///< Activate the flag to get the data from the NFC FIFO
         }else {
             printf("Something went wrong on RX_FULL - NFC_I2C_CALLBACK \n");
         }

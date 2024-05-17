@@ -62,6 +62,7 @@ typedef struct
  * @brief This function initializes the nfc_rfid_t structure
  * 
  * @param nfc 
+ * @param _i2c i2c instance
  * @param sda gpio pin for the i2c sda
  * @param scl gpio pin for the i2c scl
  * @param irq gpio pin for the nfc irq
