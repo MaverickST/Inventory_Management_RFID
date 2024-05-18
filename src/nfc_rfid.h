@@ -53,6 +53,8 @@ typedef struct
     uint8_t i2c_irq; ///< I2C IRQ number (23 or 24)
     i2c_inst_t *i2c; ///< I2C instance
 
+    uint8_t version; ///< Version of the nfc
+
     enum {NONE, ADMIN, INV, USER} userType;
     
     
@@ -90,13 +92,14 @@ void nfc_get_data_tag(nfc_rfid_t *nfc);
  */
 static inline void nfc_config_mfrc522_irq(nfc_rfid_t *nfc)
 {
+    printf("Configuring the MFRC522 IRQ\n");
     // Enable the DW_apb_i2c to start transmitting
     nfc->i2c->hw->enable = true;
     irq_set_enabled(nfc->i2c_irq, true);
     nfc->i2c_fifo_stat.rw = single_WRITE; ///< Sigle write: configures de irq ping of the nfc
     // Write the slave address to the DW_apb_i2c
-    nfc->i2c->hw->data_cmd = ADDRESS_SLAVE_MFRC522;
     nfc->i2c_fifo_stat.tx = dev_ADDRESS;
+    nfc->i2c->hw->data_cmd = ADDRESS_SLAVE_MFRC522;
 }
 
 /**
@@ -106,13 +109,14 @@ static inline void nfc_config_mfrc522_irq(nfc_rfid_t *nfc)
  */
 static inline void nfc_get_nbf(nfc_rfid_t *nfc)
 {
+    printf("Get number of bytes in the FIFO\n");
     // Enable the DW_apb_i2c to start transmitting
     nfc->i2c->hw->enable = true;
     irq_set_enabled(nfc->i2c_irq, true);
     nfc->i2c_fifo_stat.rw = single_READ; ///< Single read: read number of bytes of the FIFO
     // Write the slave address to the DW_apb_i2c
-    nfc->i2c->hw->data_cmd = ADDRESS_SLAVE_MFRC522;
     nfc->i2c_fifo_stat.tx = dev_ADDRESS;
+    nfc->i2c->hw->data_cmd = ADDRESS_SLAVE_MFRC522;
 }
 
 /**
@@ -123,14 +127,17 @@ static inline void nfc_get_nbf(nfc_rfid_t *nfc)
 
 static inline void nfc_get_data_fifo(nfc_rfid_t *nfc)
 {
+    printf("Get data from the FIFO\n");
     // Enable the DW_apb_i2c to start transmitting
     nfc->i2c->hw->enable = true;
     irq_set_enabled(nfc->i2c_irq, true);
     nfc->i2c_fifo_stat.rw = mult_READ; // Multiple read
     // Write the slave address to the DW_apb_i2c
-    nfc->i2c->hw->data_cmd = ADDRESS_SLAVE_MFRC522;
     nfc->i2c_fifo_stat.tx = dev_ADDRESS;
+    nfc->i2c->hw->data_cmd = ADDRESS_SLAVE_MFRC522;
 }
+
+void nfc_config_blocking(nfc_rfid_t *nfc);
 
 
 // MFRC522 registers. Described in chapter 9 of the datasheet.
@@ -138,19 +145,19 @@ static inline void nfc_get_data_fifo(nfc_rfid_t *nfc)
 enum {
     // Page 0: Command and status
     //						  0x00			// reserved for future use
-    CommandReg				= 0x01 << 1,	// starts and stops command execution
-    ComIEnReg				= 0x02 << 1,	// enable and disable interrupt request control bits
-    DivIEnReg				= 0x03 << 1,	// enable and disable interrupt request control bits
-    ComIrqReg				= 0x04 << 1,	// interrupt request bits
+    CommandReg				= 0x01,	// starts and stops command execution
+    ComIEnReg				= 0x02,	// enable and disable interrupt request control bits
+    DivIEnReg				= 0x03,	// enable and disable interrupt request control bits
+    ComIrqReg				= 0x04,	// interrupt request bits
     DivIrqReg				= 0x05 << 1,	// interrupt request bits
     ErrorReg				= 0x06 << 1,	// error bits showing the error status of the last command executed 
     Status1Reg				= 0x07 << 1,	// communication status bits
     Status2Reg				= 0x08 << 1,	// receiver and transmitter status bits
-    FIFODataReg				= 0x09 << 1,	// input and output of 64 byte FIFO buffer
-    FIFOLevelReg			= 0x0A << 1,	// number of bytes stored in the FIFO buffer
+    FIFODataReg				= 0x09,	// input and output of 64 byte FIFO buffer
+    FIFOLevelReg			= 0x0A,	// number of bytes stored in the FIFO buffer
     WaterLevelReg			= 0x0B << 1,	// level for FIFO underflow and overflow warning
     ControlReg				= 0x0C << 1,	// miscellaneous control registers
-    BitFramingReg			= 0x0D << 1,	// adjustments for bit-oriented frames
+    BitFramingReg			= 0x0D,	// adjustments for bit-oriented frames
     CollReg					= 0x0E << 1,	// bit position of the first bit-collision detected on the RF interface
     //						  0x0F			// reserved for future use
     
@@ -198,7 +205,7 @@ enum {
     TestPinValueReg			= 0x34 << 1,	// defines the values for D1 to D7 when it is used as an I/O bus
     TestBusReg				= 0x35 << 1,	// shows the status of the internal test bus
     AutoTestReg				= 0x36 << 1,	// controls the digital self-test
-    VersionReg				= 0x37 << 1,	// shows the software version
+    VersionReg				= 0x37,	// shows the software version
     AnalogTestReg			= 0x38 << 1,	// controls the pins AUX1 and AUX2
     TestDAC1Reg				= 0x39 << 1,	// defines the test value for TestDAC1
     TestDAC2Reg				= 0x3A << 1,	// defines the test value for TestDAC2

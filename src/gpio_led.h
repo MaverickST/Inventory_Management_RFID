@@ -13,10 +13,10 @@
 
 #include <stdint.h>
 #include "hardware/gpio.h"
-#include "pico/time.h"
-#include "hardware/timer.h"
+// #include "pico/time.h"
+// #include "hardware/timer.h"
 
-#include "functs.h"
+// #include "functs.h"
 
 typedef struct
 {

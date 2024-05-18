@@ -221,18 +221,18 @@ void program(void)
         }
     }
     ///< NFC interrupt flags
-    if (gNFC.flags.B.nbf){
-        nfc_get_nbf(&gNFC); ///< Init the process to get the number of bytes in the NFC FIFO
-        gNFC.flags.B.nbf = 0;
-    }
-    if (gNFC.flags.B.dfifo){
-        nfc_get_data_fifo(&gNFC); ///< Init the proccess to get the data from the NFC FIFO
-        gNFC.flags.B.dfifo = 0;
-    }
-    if (gNFC.flags.B.dtag){
-        nfc_get_data_tag(&gNFC); ///< From the nfc fifo, get the data tag
-        gNFC.flags.B.dtag = 0;
-    }
+    // if (gNFC.flags.B.nbf){
+    //     nfc_get_nbf(&gNFC); ///< Init the process to get the number of bytes in the NFC FIFO
+    //     gNFC.flags.B.nbf = 0;
+    // }
+    // if (gNFC.flags.B.dfifo){
+    //     nfc_get_data_fifo(&gNFC); ///< Init the proccess to get the data from the NFC FIFO
+    //     gNFC.flags.B.dfifo = 0;
+    // }
+    // if (gNFC.flags.B.dtag){
+    //     nfc_get_data_tag(&gNFC); ///< From the nfc fifo, get the data tag
+    //     gNFC.flags.B.dtag = 0;
+    // }
     ///< Keypad interrupt flags
     if (gFlags.B.kpad_rows){
         kp_set_irq_rows(&gKeyPad); ///< Switch interrupt to rows
@@ -263,9 +263,9 @@ void gpioCallback(uint num, uint32_t mask)
     case GPIO_IRQ_EDGE_RISE:
         // Just one tag can be entering at the same time
         if (num == gNFC.pinout.irq && !gTag_entering){
-            gNFC.flags.B.nbf = 1; ///< Activate the flag to get the number of bytes in the NFC FIFO
+            // gNFC.flags.B.nbf = 1; ///< Activate the flag to get the number of bytes in the NFC FIFO
             gTag_entering = true;
-            printf("Tag entering\n");
+            printf("Tag entering - RISE\n");
         }
         // If a tag is entering, the columns are captured
         else if (gTag_entering && !gKeyPad.KEY.dbnc){
@@ -275,6 +275,19 @@ void gpioCallback(uint num, uint32_t mask)
         else {
             printf("There is no a tag entering \n");
         }
+        break;
+
+    case GPIO_IRQ_EDGE_FALL:
+        // Just one tag can be entering at the same time
+        if (num == gNFC.pinout.irq && !gTag_entering){
+            // gNFC.flags.B.nbf = 1; ///< Activate the flag to get the number of bytes in the NFC FIFO
+            gTag_entering = true;
+            printf("Tag entering - FALL\n");
+        }
+        else {
+            printf("Edge fall\n");
+        }
+
         break;
     
     default:
@@ -292,6 +305,7 @@ void gpioCallback(uint num, uint32_t mask)
 
     uint32_t rows = gpio_get_all() & (0x0000000f << gKeyPad.KEY.rlsb); ///< Get rows gpio values
     if (rows){ ///< If a key was pressed, set the alarm again
+        printf("Debouncer\n");
         kp_dbnc_set_alarm(&gKeyPad);
     }else {
         gKeyPad.KEY.dbnc = 0;
