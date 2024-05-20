@@ -221,10 +221,10 @@ void program(void)
         }
     }
     ///< NFC interrupt flags
-    // if (gNFC.flags.B.nbf){
-    //     nfc_get_nbf(&gNFC); ///< Init the process to get the number of bytes in the NFC FIFO
-    //     gNFC.flags.B.nbf = 0;
-    // }
+    if (gNFC.flags.B.nbf){
+        nfc_get_nbf(&gNFC); ///< Init the process to get the number of bytes in the NFC FIFO
+        gNFC.flags.B.nbf = 0;
+    }
     // if (gNFC.flags.B.dfifo){
     //     nfc_get_data_fifo(&gNFC); ///< Init the proccess to get the data from the NFC FIFO
     //     gNFC.flags.B.dfifo = 0;

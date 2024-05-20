@@ -13,9 +13,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "hardware/sync.h"
-#include "pico/stdlib.h"
-#include "hardware/flash.h"
-#include "hardware/dma.h"
+// #include "pico/stdlib.h"
+// #include "hardware/flash.h"
+// #include "hardware/dma.h"
 #include "pico/flash.h"
 
 #include "inventory.h"

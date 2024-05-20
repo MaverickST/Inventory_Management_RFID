@@ -93,13 +93,11 @@ void nfc_get_data_tag(nfc_rfid_t *nfc);
 static inline void nfc_config_mfrc522_irq(nfc_rfid_t *nfc)
 {
     printf("Configuring the MFRC522 IRQ\n");
-    // Enable the DW_apb_i2c to start transmitting
-    nfc->i2c->hw->enable = true;
     irq_set_enabled(nfc->i2c_irq, true);
     nfc->i2c_fifo_stat.rw = single_WRITE; ///< Sigle write: configures de irq ping of the nfc
-    // Write the slave address to the DW_apb_i2c
-    nfc->i2c_fifo_stat.tx = dev_ADDRESS;
-    nfc->i2c->hw->data_cmd = ADDRESS_SLAVE_MFRC522;
+    nfc->i2c_fifo_stat.tx = dev_ADDRESS; 
+    nfc->i2c->hw->enable = true; ///< Enable the DW_apb_i2c
+    nfc->i2c->hw->data_cmd = ADDRESS_SLAVE_MFRC522; ///< Write the slave address to the DW_apb_i2c
 }
 
 /**
@@ -110,13 +108,11 @@ static inline void nfc_config_mfrc522_irq(nfc_rfid_t *nfc)
 static inline void nfc_get_nbf(nfc_rfid_t *nfc)
 {
     printf("Get number of bytes in the FIFO\n");
-    // Enable the DW_apb_i2c to start transmitting
-    nfc->i2c->hw->enable = true;
     irq_set_enabled(nfc->i2c_irq, true);
     nfc->i2c_fifo_stat.rw = single_READ; ///< Single read: read number of bytes of the FIFO
-    // Write the slave address to the DW_apb_i2c
-    nfc->i2c_fifo_stat.tx = dev_ADDRESS;
-    nfc->i2c->hw->data_cmd = ADDRESS_SLAVE_MFRC522;
+    nfc->i2c_fifo_stat.tx = dev_ADDRESS; 
+    nfc->i2c->hw->enable = true; ///< Enable the DW_apb_i2c
+    nfc->i2c->hw->data_cmd = ADDRESS_SLAVE_MFRC522; ///< Write the slave address to the DW_apb_i2c
 }
 
 /**
@@ -128,13 +124,11 @@ static inline void nfc_get_nbf(nfc_rfid_t *nfc)
 static inline void nfc_get_data_fifo(nfc_rfid_t *nfc)
 {
     printf("Get data from the FIFO\n");
-    // Enable the DW_apb_i2c to start transmitting
-    nfc->i2c->hw->enable = true;
     irq_set_enabled(nfc->i2c_irq, true);
     nfc->i2c_fifo_stat.rw = mult_READ; // Multiple read
-    // Write the slave address to the DW_apb_i2c
     nfc->i2c_fifo_stat.tx = dev_ADDRESS;
-    nfc->i2c->hw->data_cmd = ADDRESS_SLAVE_MFRC522;
+    nfc->i2c->hw->enable = true; ///< Enable the DW_apb_i2c
+    nfc->i2c->hw->data_cmd = ADDRESS_SLAVE_MFRC522; ///< Write the slave address to the DW_apb_i2c
 }
 
 void nfc_config_blocking(nfc_rfid_t *nfc);
