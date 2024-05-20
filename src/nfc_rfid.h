@@ -14,7 +14,10 @@
 #include <stdint.h>
 #include "hardware/i2c.h"
 
-#define ADDRESS_SLAVE_MFRC522 0x28 // 0b0101 -> 0010 1000
+#include "nfc_enums.h"
+
+#define ADDRESS_SLAVE_MFRC522 0x28  ///< 0b0101 -> 0010 1000
+#define MF_KEY_SIZE             6	///< A Mifare Crypto1 key is 6 bytes.
 
 typedef struct
 {
@@ -35,6 +38,7 @@ typedef struct
         uint8_t sda;
         uint8_t scl;
         uint8_t irq;
+        uint8_t rst;
     }pinout;
 
     union{
@@ -46,6 +50,9 @@ typedef struct
             uint8_t         :5;
         }B;
     }flags;
+	
+    uint8_t keyByte[MF_KEY_SIZE]; ///< Mifare Crypto1 key	
+    TagInfo tagInfo; ///< Tag information
 
     uint8_t fifo[64]; ///< Data of the nfc fifo
     uint8_t nbf; ///< number of bytes in the nfc fifo (max 64)
@@ -69,7 +76,231 @@ typedef struct
  * @param scl gpio pin for the i2c scl
  * @param irq gpio pin for the nfc irq
  */
-void nfc_init_as_i2c(nfc_rfid_t *nfc, i2c_inst_t *_i2c, uint8_t sda, uint8_t scl, uint8_t irq);
+void nfc_init_as_i2c(nfc_rfid_t *nfc, i2c_inst_t *_i2c, uint8_t sda, uint8_t scl, uint8_t irq, uint8_t rst);
+
+/**
+ * @brief This function tell us if there is a new tag in the NFC.
+ * Returns true if a PICC responds to PICC_CMD_REQA.
+ * Only "new" cards in state IDLE are invited. Sleeping cards in state HALT are ignored.
+ * 
+ * @param nfc 
+ * @return true 
+ * @return false 
+ */
+bool nfc_is_new_tag(nfc_rfid_t *nfc);
+
+/**
+ * @brief Transfers data to the MFRC522 FIFO, executes a command, waits for completion and transfers data back from the FIFO.
+ * CRC validation can only be done if backData and backLen are specified.
+ * 
+ * @param nfc 
+ * @param command   ///< The command to execute. One of the PCD_Command enums.
+ * @param waitIRq   ///< The bits in the ComIrqReg register that signals successful completion of the command.
+ * @param sendData  ///< Pointer to the data to transfer to the FIFO.
+ * @param sendLen   ///< Number of bytes to transfer to the FIFO.
+ * @param backData  ///< nullptr or pointer to buffer if data should be read back after executing the command.
+ * @param backLen   ///< In: Max number of bytes to write to *backData. Out: The number of bytes returned.
+ * @param validBits ///< In/Out: The number of valid bits in the last byte. 0 for 8 valid bits.
+ * @param rxAlign   ///< In: Defines the bit position in backData[0] for the first bit received. Default 0.
+ * @param checkCRC  ///< In: True => The last two bytes of the response is assumed to be a CRC_A that must be validated.
+ * @return uint8_t  ///< STATUS_OK on success, STATUS_??? otherwise.
+ */
+uint8_t nfc_communicate(nfc_rfid_t *nfc, uint8_t command, uint8_t waitIRq, uint8_t *sendData, uint8_t sendLen, uint8_t *backData, 
+                            uint8_t *backLen, uint8_t *validBits, uint8_t rxAlign, bool checkCRC);
+
+/**
+ * @brief Executes the Transceive command.
+ * CRC validation can only be done if backData and backLen are specified.
+ * 
+ * @param nfc 
+ * @param sendData  ///< Pointer to the data to transfer to the FIFO.
+ * @param sendLen   ///< Number of bytes to transfer to the FIFO.
+ * @param backData  ///< nullptr or pointer to buffer if data should be read back after executing the command.
+ * @param backLen   ///< In: Max number of bytes to write to *backData. Out: The number of bytes returned.
+ * @param validBits ///< In/Out: The number of valid bits in the last byte. 0 for 8 valid bits. Default nullptr.
+ * @param rxAlign   ///< In: Defines the bit position in backData[0] for the first bit received. Default 0.
+ * @param checkCRC  ///< In: True => The last two bytes of the response is assumed to be a CRC_A that must be validated.
+ * @return uint8_t 
+ */
+static inline uint8_t nfc_transceive_data(nfc_rfid_t *nfc, uint8_t *sendData, uint8_t sendLen, uint8_t *backData, 
+                            uint8_t *backLen, uint8_t *validBits, uint8_t rxAlign, bool checkCRC)
+{
+    uint8_t waitIRq = 0x30; // RxIRq and IdleIRq
+    return nfc_communicate(nfc, (uint8_t)PCD_Transceive, waitIRq, sendData, sendLen, backData, backLen, validBits, rxAlign, checkCRC);
+}
+
+/**
+ * @brief Transmits REQA or WUPA commands.
+ * 
+ * @param nfc 
+ * @param command ///< The command to send - PICC_CMD_REQA or PICC_CMD_WUPA
+ * @param bufferATQA ///< The buffer to store the ATQA (Answer to request) in
+ * @param bufferSize ///< Buffer size, at least two bytes. Also number of bytes returned if STATUS_OK.
+ * @return ///< uint8_t StatusCode
+ */
+uint8_t nfc_requestA_or_wakeupA(nfc_rfid_t *nfc, uint8_t command, uint8_t *bufferATQA, uint8_t *bufferSize);
+
+/**
+ * @brief Transmits a REQuest command, Type A. 
+ * Invites PICCs in state IDLE to go to READY and prepare for anticollision or selection. 7 bit frame.
+ * 
+ * @param nfc 
+ * @param bufferATQA ///< The buffer to store the ATQA (Answer to request) in
+ * @param bufferSize ///< Buffer size, at least two bytes. Also number of bytes returned if STATUS_OK.
+ * @return uint8_t  StatusCode
+ */
+static inline uint8_t nfc_requestA(nfc_rfid_t *nfc, uint8_t *bufferATQA, uint8_t *bufferSize)
+{
+    return nfc_requestA_or_wakeupA(nfc, (uint8_t)PICC_CMD_REQA, bufferATQA, bufferSize);
+}
+
+/**
+ * @brief Transmits a Wake-UP command, Type A. 
+ * Invites PICCs in state IDLE and HALT to go to READY(*) and prepare for anticollision or selection. 7 bit frame.
+ * 
+ * @param nfc 
+ * @param bufferATQA ///< The buffer to store the ATQA (Answer to request) in
+ * @param bufferSize ///< Buffer size, at least two bytes. Also number of bytes returned if STATUS_OK.
+ * @return uint8_t  StatusCode
+ */
+static inline uint8_t nfc_wakeupA(nfc_rfid_t *nfc, uint8_t *bufferATQA, uint8_t *bufferSize)
+{
+    return nfc_requestA_or_wakeupA(nfc, (uint8_t)PICC_CMD_WUPA, bufferATQA, bufferSize);
+}
+
+/**
+ * @brief Perform a write operation to the NFC.
+ * 
+ * @param nfc 
+ * @param reg 
+ * @param data 
+ */
+static inline void nfc_write_blocking(nfc_rfid_t *nfc, uint8_t reg, uint8_t data)
+{
+    uint8_t buf[2] = {reg, data};
+    i2c_write_blocking(nfc->i2c, ADDRESS_SLAVE_MFRC522, buf, 2, false);
+}
+
+/**
+ * @brief Perform multiple write operations to the NFC.
+ * 
+ * @param nfc 
+ * @param reg 
+ * @param data 
+ * @param len 
+ */
+static inline void nfc_write_mult_blocking(nfc_rfid_t *nfc, uint8_t reg, uint8_t *data, uint8_t len)
+{
+    uint8_t buf[64] = {reg};
+    for (int i = 0; i < len; i++)
+    {
+        buf[i+1] = data[i];
+    }
+    i2c_write_blocking(nfc->i2c, ADDRESS_SLAVE_MFRC522, buf, len+1, false);
+}
+
+/**
+ * @brief Perform a read operation to the NFC.
+ * 
+ * @param nfc 
+ * @param reg 
+ * @return uint8_t 
+ */
+static inline uint8_t nfc_read_blocking(nfc_rfid_t *nfc, uint8_t reg)
+{
+    uint8_t data;
+    i2c_write_blocking(nfc->i2c, ADDRESS_SLAVE_MFRC522, &reg, 1, true);
+    i2c_read_blocking(nfc->i2c, ADDRESS_SLAVE_MFRC522, &data, 1, false);
+    return data;
+}
+
+/**
+ * @brief Perform multiple read operations to the NFC.
+ * 
+ * @param nfc 
+ * @param reg 
+ * @param data 
+ * @param len 
+ * @param rxAlign ///< Only bit positions rxAlign..7 in values[0] are updated. Default 0.
+ */
+static inline void nfc_read_mult_blocking(nfc_rfid_t *nfc, uint8_t reg, uint8_t *data, uint8_t len, uint8_t rxAlign)
+{
+    i2c_write_blocking(nfc->i2c, ADDRESS_SLAVE_MFRC522, &reg, 1, true);
+    i2c_read_blocking(nfc->i2c, ADDRESS_SLAVE_MFRC522, data, len, false);
+    if (rxAlign)
+    {
+        uint8_t mask = (0xFF << rxAlign) & 0xFF;
+        data[0] = (data[0] & ~mask) | (data[1] & mask);
+    }
+}
+
+/**
+ * @brief Clears the bits given in mask from register reg.
+ * 
+ * @param nfc 
+ * @param reg 
+ * @param mask ///< The bits to clear.
+ */
+static inline void nfc_clear_reg_bitmask(nfc_rfid_t *nfc, uint8_t reg, uint8_t mask)
+{
+    uint8_t value = nfc_read_blocking(nfc, reg);
+    nfc_write_blocking(nfc, reg, value & (~mask));
+}
+
+/**
+ * @brief Sets the bits given in mask in register reg.
+ * 
+ * @param nfc 
+ * @param reg 
+ * @param mask 
+ */
+static inline void nfc_set_reg_bitmask(nfc_rfid_t *nfc, uint8_t reg, uint8_t mask)
+{
+    uint8_t value = nfc_read_blocking(nfc, reg);
+    nfc_write_blocking(nfc, reg, value | mask);
+}
+
+/**
+ * @brief Turn on the NFC antenna.
+ * Turns the antenna on by enabling pins TX1 and TX2.
+ * After a reset these pins are disabled.
+ * 
+ * @param nfc 
+ */
+static inline void nfc_antenna_on(nfc_rfid_t *nfc)
+{
+    uint8_t TxControlReg = 0x14;
+    uint8_t value = nfc_read_blocking(nfc, TxControlReg);
+    if ((value & 0x03) != 0x03)
+    {
+        nfc_write_blocking(nfc, TxControlReg, value | 0x03);
+    }
+}
+
+/**
+ * @brief Performs a soft reset on the MFRC522 chip and waits for it to be ready again.
+ * 
+ * @param nfc 
+ */
+static inline void nfc_reset(nfc_rfid_t *nfc)
+{
+    nfc_write_blocking(nfc, CommandReg, PCD_SoftReset);
+    uint8_t count = 0;
+    do {
+        sleep_ms(1);
+    } while ((nfc_read_blocking(nfc, CommandReg) & (1<<4)) && (++count) < 3);
+}
+
+/**
+ * @brief Use the CRC coprocessor in the MFRC522 to calculate a CRC_A.
+ * 
+ * @param nfc 
+ * @param data 
+ * @param len 
+ * @param result 
+ * @return uint8_t STATUS_OK on success, STATUS_??? otherwise.
+ */
+uint8_t nfc_calculate_crc(nfc_rfid_t *nfc, uint8_t *data, uint8_t len, uint8_t *result);
 
 /**
  * @brief Callback function for the I2C interruption, which is called by the I2C handler.
@@ -133,82 +364,6 @@ static inline void nfc_get_data_fifo(nfc_rfid_t *nfc)
 
 void nfc_config_blocking(nfc_rfid_t *nfc);
 
-
-// MFRC522 registers. Described in chapter 9 of the datasheet.
-// When using SPI all addresses are shifted one bit left in the "SPI address byte" (section 8.1.2.3)
-enum {
-    // Page 0: Command and status
-    //						  0x00			// reserved for future use
-    CommandReg				= 0x01,	// starts and stops command execution
-    ComIEnReg				= 0x02,	// enable and disable interrupt request control bits
-    DivIEnReg				= 0x03,	// enable and disable interrupt request control bits
-    ComIrqReg				= 0x04,	// interrupt request bits
-    DivIrqReg				= 0x05 << 1,	// interrupt request bits
-    ErrorReg				= 0x06 << 1,	// error bits showing the error status of the last command executed 
-    Status1Reg				= 0x07 << 1,	// communication status bits
-    Status2Reg				= 0x08 << 1,	// receiver and transmitter status bits
-    FIFODataReg				= 0x09,	// input and output of 64 byte FIFO buffer
-    FIFOLevelReg			= 0x0A,	// number of bytes stored in the FIFO buffer
-    WaterLevelReg			= 0x0B << 1,	// level for FIFO underflow and overflow warning
-    ControlReg				= 0x0C << 1,	// miscellaneous control registers
-    BitFramingReg			= 0x0D,	// adjustments for bit-oriented frames
-    CollReg					= 0x0E << 1,	// bit position of the first bit-collision detected on the RF interface
-    //						  0x0F			// reserved for future use
-    
-    // Page 1: Command
-    // 						  0x10			// reserved for future use
-    ModeReg					= 0x11 << 1,	// defines general modes for transmitting and receiving 
-    TxModeReg				= 0x12 << 1,	// defines transmission data rate and framing
-    RxModeReg				= 0x13 << 1,	// defines reception data rate and framing
-    TxControlReg			= 0x14 << 1,	// controls the logical behavior of the antenna driver pins TX1 and TX2
-    TxASKReg				= 0x15 << 1,	// controls the setting of the transmission modulation
-    TxSelReg				= 0x16 << 1,	// selects the internal sources for the antenna driver
-    RxSelReg				= 0x17 << 1,	// selects internal receiver settings
-    RxThresholdReg			= 0x18 << 1,	// selects thresholds for the bit decoder
-    DemodReg				= 0x19 << 1,	// defines demodulator settings
-    // 						  0x1A			// reserved for future use
-    // 						  0x1B			// reserved for future use
-    MfTxReg					= 0x1C << 1,	// controls some MIFARE communication transmit parameters
-    MfRxReg					= 0x1D << 1,	// controls some MIFARE communication receive parameters
-    // 						  0x1E			// reserved for future use
-    SerialSpeedReg			= 0x1F << 1,	// selects the speed of the serial UART interface
-    
-    // Page 2: Configuration
-    // 						  0x20			// reserved for future use
-    CRCResultRegH			= 0x21 << 1,	// shows the MSB and LSB values of the CRC calculation
-    CRCResultRegL			= 0x22 << 1,
-    // 						  0x23			// reserved for future use
-    ModWidthReg				= 0x24 << 1,	// controls the ModWidth setting?
-    // 						  0x25			// reserved for future use
-    RFCfgReg				= 0x26 << 1,	// configures the receiver gain
-    GsNReg					= 0x27 << 1,	// selects the conductance of the antenna driver pins TX1 and TX2 for modulation 
-    CWGsPReg				= 0x28 << 1,	// defines the conductance of the p-driver output during periods of no modulation
-    ModGsPReg				= 0x29 << 1,	// defines the conductance of the p-driver output during periods of modulation
-    TModeReg				= 0x2A << 1,	// defines settings for the internal timer
-    TPrescalerReg			= 0x2B << 1,	// the lower 8 bits of the TPrescaler value. The 4 high bits are in TModeReg.
-    TReloadRegH				= 0x2C << 1,	// defines the 16-bit timer reload value
-    TReloadRegL				= 0x2D << 1,
-    TCounterValueRegH		= 0x2E << 1,	// shows the 16-bit timer value
-    TCounterValueRegL		= 0x2F << 1,
-    
-    // Page 3: Test Registers
-    // 						  0x30			// reserved for future use
-    TestSel1Reg				= 0x31 << 1,	// general test signal configuration
-    TestSel2Reg				= 0x32 << 1,	// general test signal configuration
-    TestPinEnReg			= 0x33 << 1,	// enables pin output driver on pins D1 to D7
-    TestPinValueReg			= 0x34 << 1,	// defines the values for D1 to D7 when it is used as an I/O bus
-    TestBusReg				= 0x35 << 1,	// shows the status of the internal test bus
-    AutoTestReg				= 0x36 << 1,	// controls the digital self-test
-    VersionReg				= 0x37,	// shows the software version
-    AnalogTestReg			= 0x38 << 1,	// controls the pins AUX1 and AUX2
-    TestDAC1Reg				= 0x39 << 1,	// defines the test value for TestDAC1
-    TestDAC2Reg				= 0x3A << 1,	// defines the test value for TestDAC2
-    TestADCReg				= 0x3B << 1		// shows the value of ADC I and Q channels
-    // 						  0x3C			// reserved for production tests
-    // 						  0x3D			// reserved for production tests
-    // 						  0x3E			// reserved for production tests
-    // 						  0x3F			// reserved for production tests
-};
 
 
 #endif // __NFC_RFID_

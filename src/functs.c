@@ -43,7 +43,7 @@ void initGlobalVariables(void)
     gFlags.W = 0x00U;
     led_init(&gLed, 18);
     kp_init(&gKeyPad, 2, 6, 100000, true);
-    nfc_init_as_i2c(&gNFC, i2c1, 14, 15, 11);
+    nfc_init_as_i2c(&gNFC, i2c1, 14, 15, 11, 12);
     inventory_init(&gInventory, false);
 }
 
