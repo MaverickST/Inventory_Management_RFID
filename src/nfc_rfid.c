@@ -8,13 +8,13 @@
  * \copyright   Unlicensed
  */
 
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "pico/stdlib.h"
-#include "hardware/i2c.h"
 #include "pico/binary_info.h"
+#include "pico/time.h"
+#include "hardware/irq.h"
+#include "hardware/gpio.h"
 
 #include "nfc_rfid.h"
 #include "functs.h"
@@ -30,6 +30,9 @@ void nfc_init_as_i2c(nfc_rfid_t *nfc, i2c_inst_t *_i2c, uint8_t sda, uint8_t scl
     nfc->nbf = 0;
     nfc->idx_fifo = 0;
     nfc->userType = INV;
+    nfc->flags.W = 0;
+    nfc->timeCheck = 1000000; ///< 1s = 1000000 us
+    nfc->timer_irq = TIMER_IRQ_1;
 
     nfc->i2c = _i2c;
     if (_i2c == i2c0){
@@ -70,6 +73,7 @@ void nfc_init_as_i2c(nfc_rfid_t *nfc, i2c_inst_t *_i2c, uint8_t sda, uint8_t scl
         // of the crystal + 37,74μs. Let us be generous: 50ms.
         sleep_ms(50);
     }else { ///< Perform a soft reset
+        printf("Performing a soft reset\n");
         nfc_reset(nfc);
     }
 
@@ -117,8 +121,11 @@ bool nfc_is_new_tag(nfc_rfid_t *nfc)
     nfc_write_blocking(nfc, RxModeReg, 0x00);
     // Reset ModWidthReg
     nfc_write_blocking(nfc, ModWidthReg, 0x26);
+    printf("Checking...\n");
 
     uint8_t result = nfc_requestA(nfc, bufferATQA, &bufferSize);
+
+    printf("Result: %d\n", result);
 
     if (result == STATUS_OK || result == STATUS_COLLISION) {
         nfc->tagInfo.atqa = (bufferATQA[1] << 8) | bufferATQA[0];
@@ -181,7 +188,8 @@ uint8_t nfc_communicate(nfc_rfid_t *nfc, uint8_t command, uint8_t waitIRq, uint8
     bool completed = false;
 
     do {
-        uint8_t n = nfc_read_blocking(nfc, ComIrqReg); ///< ComIrqReg[7..0] bits are: Set1 TxIRq RxIRq IdleIRq HiAlertIRq LoAlertIRq ErrIRq TimerIRq
+        uint8_t n;
+        nfc_read_blocking(nfc, ComIrqReg, &n); ///< ComIrqReg[7..0] bits are: Set1 TxIRq RxIRq IdleIRq HiAlertIRq LoAlertIRq ErrIRq TimerIRq
         if (n & waitIRq) { ///< One of the interrupts that signal success has been set.
             completed = true;
             break;
@@ -197,7 +205,8 @@ uint8_t nfc_communicate(nfc_rfid_t *nfc, uint8_t command, uint8_t waitIRq, uint8
     }
 
     // Stop now if any errors except collisions were detected.
-    uint8_t errorRegValue = nfc_read_blocking(nfc, ErrorReg); ///< ErrorReg[7..0] bits are: WrErr TempErr reserved BufferOvfl CollErr CRCErr ParityErr ProtocolErr
+    uint8_t errorRegValue;
+    nfc_read_blocking(nfc, ErrorReg, &errorRegValue); ///< ErrorReg[7..0] bits are: WrErr TempErr reserved BufferOvfl CollErr CRCErr ParityErr ProtocolErr
     if (errorRegValue & 0x13) { ///< BufferOvfl ParityErr ProtocolErr
         return STATUS_ERROR;
     }
@@ -206,13 +215,16 @@ uint8_t nfc_communicate(nfc_rfid_t *nfc, uint8_t command, uint8_t waitIRq, uint8
 
     // If the caller wants data back, get it from the MFRC522.
     if (backData && backLen) {
-        uint8_t n = nfc_read_blocking(nfc, FIFOLevelReg); ///< Number of bytes in the FIFO
+        uint8_t n;
+        nfc_read_blocking(nfc, FIFOLevelReg, &n); ///< Number of bytes in the FIFO
+        printf("Comunicate - n: %d, backLen: %d\n", n, *backLen);
         if (n > *backLen) {
             return STATUS_NO_ROOM;
         }
         *backLen = n; ///< Number of bytes returned
         nfc_read_mult_blocking(nfc, FIFODataReg, backData, n, rxAlign); ///< Get received data from FIFO
-        _validBits = nfc_read_blocking(nfc, ControlReg) & 0x07; ///< RxLastBits[2:0] indicates the number of valid bits in the last received byte. If this value is 000b, the whole byte is valid.
+        nfc_read_blocking(nfc, ControlReg, &_validBits); ///< RxLastBits[2:0] indicates the number of valid bits in the last received byte. If this value is 000b, the whole byte is valid.
+        _validBits = _validBits & 0x07;
         if (validBits) {
             *validBits = _validBits;
         }
@@ -311,6 +323,11 @@ void nfc_config_blocking(nfc_rfid_t *nfc)
     }else {
         printf("Number of bytes in the NFC FIFO: %d\n", nfc->nbf);
     }
+}
+
+uint8_t nfc_calculate_crc(nfc_rfid_t *nfc, uint8_t *data, uint8_t len, uint8_t *result)
+{
+    return 0;
 }
 
 void nfc_i2c_callback(nfc_rfid_t *nfc)

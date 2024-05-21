@@ -33,7 +33,7 @@ key_pad_t gKeyPad;
 nfc_rfid_t gNFC;
 inventory_t gInventory;
 
-bool gTag_entering = true; ///< Flag that indicates that a tag is being entered
+bool gTag_entering = false; ///< Flag that indicates that a tag is being entered
 
 flags_t gFlags; ///< Global variable that stores the flags of the interruptions pending
 
@@ -43,7 +43,7 @@ void initGlobalVariables(void)
     gFlags.W = 0x00U;
     led_init(&gLed, 18);
     kp_init(&gKeyPad, 2, 6, 100000, true);
-    nfc_init_as_i2c(&gNFC, i2c1, 14, 15, 11, 12);
+    nfc_init_as_i2c(&gNFC, i2c1, 14, 15, 12, 11);
     inventory_init(&gInventory, false);
 }
 
@@ -273,7 +273,7 @@ void gpioCallback(uint num, uint32_t mask)
             gFlags.B.kpad_cols = 1; ///< Activate the flag to switch the interrupt to columns
         }
         else {
-            printf("There is no a tag entering \n");
+            printf("There is no a tag entering - RISE\n");
         }
         break;
 
@@ -318,13 +318,47 @@ void gpioCallback(uint num, uint32_t mask)
 void led_timer_handler(void)
 {
     // Set the alarm
-    hw_clear_bits(&timer_hw->intr, 1u << TIMER_IRQ_0);
+    hw_clear_bits(&timer_hw->intr, 1u << gLed.timer_irq);
 
     if (gLed.state){
         led_set_alarm(&gLed);
     }else {
         led_off(&gLed);
-        irq_set_enabled(TIMER_IRQ_0, false); ///< Disable the led timer
+        irq_set_enabled(gLed.timer_irq, false); ///< Disable the led timer
+    }
+}
+
+void check_tag_timer_handler(void)
+{
+    printf("Check tag handler\n");
+    // Set the alarm
+    hw_clear_bits(&timer_hw->intr, 1u << gNFC.timer_irq);
+    // Setting the IRQ handler
+    irq_set_exclusive_handler(gNFC.timer_irq, check_tag_timer_handler);
+    irq_set_enabled(gNFC.timer_irq, true);
+    hw_set_bits(&timer_hw->inte, 1u << gNFC.timer_irq); ///< Enable alarm1 for keypad debouncer
+    timer_hw->alarm[gNFC.timer_irq] = (uint32_t)(time_us_64() + gNFC.timeCheck); ///< Set alarm1 to trigger in 1s
+
+    // Check for an abort condition
+    uint32_t abort_reason = gNFC.i2c->hw->tx_abrt_source;
+    if (abort_reason){
+        ///< Note clearing the abort flag also clears the reason, and
+        ///< this instance of flag is clear-on-read! Note also the
+        ///< IC_CLR_TX_ABRT register always reads as 0.
+        gNFC.i2c->hw->clr_tx_abrt;
+        printf("Config - I2C abort reason: %08x\n", abort_reason);
+        ///< nfc_config_mfrc522_irq(&gNFC);
+        gNFC.i2c_fifo_stat.tx = 0;
+        return;
+    }
+
+    // Check for a tag entering
+    if (!gTag_entering && nfc_is_new_tag(&gNFC)){
+        gTag_entering = true;
+        printf("Tag entering \n");
+    }
+    else {
+        printf("There is no a tag entering\n");
     }
 }
 

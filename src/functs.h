@@ -73,6 +73,12 @@ void dbnc_timer_handler(void);
 void led_timer_handler(void);
 
 /**
+ * @brief Handler for the check tag timer interruptions.
+ * 
+ */
+void check_tag_timer_handler(void);
+
+/**
  * @brief Handler for the I2C interruptions.
  * 
  */

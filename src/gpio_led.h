@@ -27,6 +27,7 @@ typedef struct
     uint8_t lsb_rgb;    ///< LSB of the RGB LED
     uint8_t color;      ///< Value of the RGB LED
     uint32_t time;      ///< Time (us) for the RGB LED
+    uint8_t timer_irq;  ///< Alarm timer IRQ number (TIMER_IRQ_0)
 
 }led_rgb_t;
 
@@ -42,6 +43,7 @@ static inline void led_init(led_rgb_t *led, uint8_t lsb_rgb)
     led->state = false;
     led->color = 0x00;
     led->time = 500000;
+    led->timer_irq = TIMER_IRQ_0;
     gpio_init_mask(0x00000007 << lsb_rgb); // gpios for key rows 2,3,4,5
     gpio_set_dir_masked(0x00000007 << lsb_rgb, 0x00000007 << lsb_rgb); // rows as outputs
     gpio_put_masked(0x00000007 << lsb_rgb, 0x00000000);
@@ -55,14 +57,14 @@ static inline void led_init(led_rgb_t *led, uint8_t lsb_rgb)
 static inline void led_set_alarm(led_rgb_t *led)
 {
     // Interrupt acknowledge
-    hw_clear_bits(&timer_hw->intr, 1u << TIMER_IRQ_0);
+    hw_clear_bits(&timer_hw->intr, 1u << led->timer_irq);
     led->state = false;
 
     // Setting the IRQ handler
-    irq_set_exclusive_handler(TIMER_IRQ_0, led_timer_handler);
-    irq_set_enabled(TIMER_IRQ_0, true);
-    hw_set_bits(&timer_hw->inte, 1u << TIMER_IRQ_0); ///< Enable alarm1 for keypad debouncer
-    timer_hw->alarm[TIMER_IRQ_0] = (uint32_t)(time_us_64() + led->time); ///< Set alarm1 to trigger in 100ms
+    irq_set_exclusive_handler(led->timer_irq, led_timer_handler);
+    irq_set_enabled(led->timer_irq, true);
+    hw_set_bits(&timer_hw->inte, 1u << led->timer_irq); ///< Enable alarm1 for keypad debouncer
+    timer_hw->alarm[led->timer_irq] = (uint32_t)(time_us_64() + led->time); ///< Set alarm1 to trigger in 100ms
 }
 
 /**
