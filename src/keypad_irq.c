@@ -37,7 +37,7 @@ void kp_init(key_pad_t *kpad, uint8_t rlsb, uint8_t clsb, uint32_t dbnc_time, bo
     gDBNC_TIME = dbnc_time;
     kpad->KEY.dzero = 0;
     kpad->KEY.en = en;
-    kpad->timer_irq = TIMER_IRQ_1;
+    kpad->timer_irq = TIMER_IRQ_0;
 
     // Initialize keypad gpios
     gpio_init_mask(0x0000000F << kpad->KEY.rlsb); // gpios for key rows 2,3,4,5

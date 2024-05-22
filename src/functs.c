@@ -27,6 +27,14 @@
 #include "inventory.h"
 // #include "liquid_crystal_i2c.h"
 
+// SPI pins
+#define PIN_SCK 10
+#define PIN_MOSI 11
+#define PIN_MISO 12
+#define PIN_CS 13
+#define PIN_IRQ 14
+#define PIN_RST 16
+
 // lcd_t gLcd;
 led_rgb_t gLed;
 key_pad_t gKeyPad;
@@ -43,7 +51,8 @@ void initGlobalVariables(void)
     gFlags.W = 0x00U;
     led_init(&gLed, 18);
     kp_init(&gKeyPad, 2, 6, 100000, true);
-    nfc_init_as_i2c(&gNFC, i2c1, 14, 15, 12, 11);
+    // nfc_init_as_i2c(&gNFC, i2c1, 14, 15, 12, 11);
+    nfc_init_as_spi(&gNFC, spi0, PIN_SCK, PIN_MOSI, PIN_MISO, PIN_CS, PIN_IRQ, PIN_RST);
     inventory_init(&gInventory, false);
 }
 
@@ -331,6 +340,7 @@ void led_timer_handler(void)
 void check_tag_timer_handler(void)
 {
     printf("Check tag handler\n");
+    printf("Check tag handler 2\n");
     // Set the alarm
     hw_clear_bits(&timer_hw->intr, 1u << gNFC.timer_irq);
     // Setting the IRQ handler
@@ -339,20 +349,8 @@ void check_tag_timer_handler(void)
     hw_set_bits(&timer_hw->inte, 1u << gNFC.timer_irq); ///< Enable alarm1 for keypad debouncer
     timer_hw->alarm[gNFC.timer_irq] = (uint32_t)(time_us_64() + gNFC.timeCheck); ///< Set alarm1 to trigger in 1s
 
-    // Check for an abort condition
-    uint32_t abort_reason = gNFC.i2c->hw->tx_abrt_source;
-    if (abort_reason){
-        ///< Note clearing the abort flag also clears the reason, and
-        ///< this instance of flag is clear-on-read! Note also the
-        ///< IC_CLR_TX_ABRT register always reads as 0.
-        gNFC.i2c->hw->clr_tx_abrt;
-        printf("Config - I2C abort reason: %08x\n", abort_reason);
-        ///< nfc_config_mfrc522_irq(&gNFC);
-        gNFC.i2c_fifo_stat.tx = 0;
-        return;
-    }
-
     // Check for a tag entering
+    printf("Check for a tag entering\n");
     if (!gTag_entering && nfc_is_new_tag(&gNFC)){
         gTag_entering = true;
         printf("Tag entering \n");
@@ -362,25 +360,25 @@ void check_tag_timer_handler(void)
     }
 }
 
-void i2c_handler(void)
-{
-    // Check for an abort condition
-    uint32_t abort_reason = gNFC.i2c->hw->tx_abrt_source;
-    if (abort_reason){
-        ///< Note clearing the abort flag also clears the reason, and
-        ///< this instance of flag is clear-on-read! Note also the
-        ///< IC_CLR_TX_ABRT register always reads as 0.
-        gNFC.i2c->hw->clr_tx_abrt;
-        printf("Config - I2C abort reason: %08x\n", abort_reason);
-        ///< nfc_config_mfrc522_irq(&gNFC);
-        gNFC.i2c_fifo_stat.tx = 0;
-        return;
-    }
-    // printf("I2C handler: %08x \n", gNFC.i2c->hw->raw_intr_stat);
-    if (gNFC.i2c->hw->raw_intr_stat){
-        nfc_i2c_callback(&gNFC);
-    }
+// void i2c_handler(void)
+// {
+//     // Check for an abort condition
+//     uint32_t abort_reason = gNFC.i2c->hw->tx_abrt_source;
+//     if (abort_reason){
+//         ///< Note clearing the abort flag also clears the reason, and
+//         ///< this instance of flag is clear-on-read! Note also the
+//         ///< IC_CLR_TX_ABRT register always reads as 0.
+//         gNFC.i2c->hw->clr_tx_abrt;
+//         printf("Config - I2C abort reason: %08x\n", abort_reason);
+//         ///< nfc_config_mfrc522_irq(&gNFC);
+//         gNFC.i2c_fifo_stat.tx = 0;
+//         return;
+//     }
+//     // printf("I2C handler: %08x \n", gNFC.i2c->hw->raw_intr_stat);
+//     if (gNFC.i2c->hw->raw_intr_stat){
+//         nfc_i2c_callback(&gNFC);
+//     }
 
-    ///< Clear the interrupt
-    gNFC.i2c->hw->clr_intr;
-}
+//     ///< Clear the interrupt
+//     gNFC.i2c->hw->clr_intr;
+// }

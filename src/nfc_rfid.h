@@ -13,12 +13,18 @@
 
 #include <stdint.h>
 #include "hardware/i2c.h"
+#include "hardware/spi.h"
 
 #include "nfc_enums.h"
 
 #define ADDRESS_SLAVE_MFRC522 0x28  ///< 0b0101 -> 0010 1000
 #define MF_KEY_SIZE             6	///< A Mifare Crypto1 key is 6 bytes.
+#define READ_BIT 0x80 ///< Bit used in I2C to read a register
 
+/**
+ * \typedef nfc_rfic_t
+ * \brief Data strcuture to manage the NFC RFID device.
+ */
 typedef struct
 {
     struct
@@ -39,6 +45,10 @@ typedef struct
         uint8_t scl;
         uint8_t irq;
         uint8_t rst;
+        uint8_t sck;
+        uint8_t mosi;
+        uint8_t miso;
+        uint8_t cs;
     }pinout;
 
     union{
@@ -60,7 +70,9 @@ typedef struct
     uint8_t nbf; ///< number of bytes in the nfc fifo (max 64)
     uint8_t idx_fifo; ///< Index of the nfc fifo
     uint8_t i2c_irq; ///< I2C IRQ number (23 or 24)
+    uint8_t spi_irq; ///< SPI IRQ number (25 or 26)
     i2c_inst_t *i2c; ///< I2C instance
+    spi_inst_t *spi; ///< SPI instance
 
     uint8_t version; ///< Version of the nfc
 
@@ -80,6 +92,20 @@ typedef struct
  * @param rst gpio pin for the nfc rst
  */
 void nfc_init_as_i2c(nfc_rfid_t *nfc, i2c_inst_t *_i2c, uint8_t sda, uint8_t scl, uint8_t irq, uint8_t rst);
+
+/**
+ * @brief This function initializes the nfc_rfid_t structure as SPI
+ * 
+ * @param nfc 
+ * @param _spi 
+ * @param sck 
+ * @param mosi 
+ * @param miso 
+ * @param cs 
+ * @param irq 
+ * @param rst 
+ */
+void nfc_init_as_spi(nfc_rfid_t *nfc, spi_inst_t *_spi, uint8_t sck, uint8_t mosi, uint8_t miso, uint8_t cs, uint8_t irq, uint8_t rst);
 
 /**
  * @brief This function tell us if there is a new tag in the NFC.
@@ -172,16 +198,40 @@ static inline uint8_t nfc_wakeupA(nfc_rfid_t *nfc, uint8_t *bufferATQA, uint8_t 
 }
 
 /**
+ * @brief // Select slave
+ * 
+ * @param nfc 
+ */
+static inline void cs_select(nfc_rfid_t *nfc) {
+    asm volatile("nop \n nop \n nop");
+    gpio_put(nfc->pinout.cs, 0);  // Active low
+    asm volatile("nop \n nop \n nop");
+}
+
+/**
+ * @brief // Deselect slave
+ * 
+ * @param nfc 
+ */
+static inline void cs_deselect(nfc_rfid_t *nfc) {
+    asm volatile("nop \n nop \n nop");
+    gpio_put(nfc->pinout.cs, 1);
+    asm volatile("nop \n nop \n nop");
+}
+
+/**
  * @brief Perform a write operation to the NFC.
  * 
  * @param nfc 
  * @param reg 
  * @param data 
  */
-static inline void nfc_write_blocking(nfc_rfid_t *nfc, uint8_t reg, uint8_t data)
+static inline void nfc_write(nfc_rfid_t *nfc, uint8_t reg, uint8_t data)
 {
     uint8_t buf[2] = {reg, data};
-    i2c_write_blocking(nfc->i2c, ADDRESS_SLAVE_MFRC522, buf, 2, false);
+    cs_select(nfc);
+    spi_write_blocking(nfc->spi, buf, 2);
+    cs_deselect(nfc);
 }
 
 /**
@@ -192,14 +242,16 @@ static inline void nfc_write_blocking(nfc_rfid_t *nfc, uint8_t reg, uint8_t data
  * @param data 
  * @param len 
  */
-static inline void nfc_write_mult_blocking(nfc_rfid_t *nfc, uint8_t reg, uint8_t *data, uint8_t len)
+static inline void nfc_write_mult(nfc_rfid_t *nfc, uint8_t reg, uint8_t *data, uint8_t len)
 {
     uint8_t buf[64] = {reg};
     for (int i = 0; i < len; i++)
     {
         buf[i+1] = data[i];
     }
-    i2c_write_blocking(nfc->i2c, ADDRESS_SLAVE_MFRC522, buf, len+1, false);
+    cs_select(nfc);
+    spi_write_blocking(nfc->spi, buf, len+1);
+    cs_deselect(nfc);
 }
 
 /**
@@ -207,12 +259,16 @@ static inline void nfc_write_mult_blocking(nfc_rfid_t *nfc, uint8_t reg, uint8_t
  * 
  * @param nfc 
  * @param reg 
- * @return uint8_t 
+ * @param data 
  */
-static inline void nfc_read_blocking(nfc_rfid_t *nfc, uint8_t reg, uint8_t *data)
+static inline void nfc_read(nfc_rfid_t *nfc, uint8_t reg, uint8_t *data)
 {
-    i2c_write_blocking(nfc->i2c, ADDRESS_SLAVE_MFRC522, &reg, 1, true);
-    i2c_read_blocking(nfc->i2c, ADDRESS_SLAVE_MFRC522, data, 1, false);
+    reg = reg | READ_BIT;
+    cs_select(nfc);
+    spi_write_blocking(nfc->spi, &reg, 1);
+    sleep_ms(10);
+    spi_read_blocking(nfc->spi, 0, data, 1);
+    cs_deselect(nfc);
 }
 
 /**
@@ -224,10 +280,14 @@ static inline void nfc_read_blocking(nfc_rfid_t *nfc, uint8_t reg, uint8_t *data
  * @param len 
  * @param rxAlign ///< Only bit positions rxAlign..7 in values[0] are updated. Default 0.
  */ 
-static inline void nfc_read_mult_blocking(nfc_rfid_t *nfc, uint8_t reg, uint8_t *data, uint8_t len, uint8_t rxAlign)
+static inline void nfc_read_mult(nfc_rfid_t *nfc, uint8_t reg, uint8_t *data, uint8_t len, uint8_t rxAlign)
 {
-    i2c_write_blocking(nfc->i2c, ADDRESS_SLAVE_MFRC522, &reg, 1, true);
-    i2c_read_blocking(nfc->i2c, ADDRESS_SLAVE_MFRC522, data, len, false);
+    reg = reg | READ_BIT;
+    cs_select(nfc);
+    spi_write_blocking(nfc->spi, &reg, 1);
+    sleep_ms(10);
+    spi_read_blocking(nfc->spi, 0, data, len);
+    cs_deselect(nfc);
     if (rxAlign)
     {
         uint8_t mask = (0xFF << rxAlign) & 0xFF;
@@ -245,8 +305,9 @@ static inline void nfc_read_mult_blocking(nfc_rfid_t *nfc, uint8_t reg, uint8_t 
 static inline void nfc_clear_reg_bitmask(nfc_rfid_t *nfc, uint8_t reg, uint8_t mask)
 {
     uint8_t value;
-    nfc_read_blocking(nfc, reg, &value);
-    nfc_write_blocking(nfc, reg, value & (~mask));
+    nfc_read(nfc, reg, &value);
+    sleep_ms(10);
+    nfc_write(nfc, reg, (uint8_t)(value & (~mask)));
 }
 
 /**
@@ -259,8 +320,9 @@ static inline void nfc_clear_reg_bitmask(nfc_rfid_t *nfc, uint8_t reg, uint8_t m
 static inline void nfc_set_reg_bitmask(nfc_rfid_t *nfc, uint8_t reg, uint8_t mask)
 {
     uint8_t value;
-    nfc_read_blocking(nfc, reg, &value);
-    nfc_write_blocking(nfc, reg, value | mask);
+    nfc_read(nfc, reg, &value);
+    sleep_ms(10);
+    nfc_write(nfc, reg, (uint8_t)(value | mask));
 }
 
 /**
@@ -272,12 +334,11 @@ static inline void nfc_set_reg_bitmask(nfc_rfid_t *nfc, uint8_t reg, uint8_t mas
  */
 static inline void nfc_antenna_on(nfc_rfid_t *nfc)
 {
-    uint8_t TxControlReg = 0x14;
     uint8_t value;
-    nfc_read_blocking(nfc, TxControlReg, &value);
+    nfc_read(nfc, TxControlReg, &value);
     if ((value & 0x03) != 0x03)
     {
-        nfc_write_blocking(nfc, TxControlReg, value | 0x03);
+        nfc_write(nfc, TxControlReg, value | 0x03);
     }
 }
 
@@ -288,12 +349,12 @@ static inline void nfc_antenna_on(nfc_rfid_t *nfc)
  */
 static inline void nfc_reset(nfc_rfid_t *nfc)
 {
-    nfc_write_blocking(nfc, CommandReg, PCD_SoftReset);
+    nfc_write(nfc, CommandReg, PCD_SoftReset);
     uint8_t count = 0;
     uint8_t value;
     do {
         sleep_ms(1);
-        nfc_read_blocking(nfc, CommandReg, &value);
+        nfc_read(nfc, CommandReg, &value);
     } while ((value & (1<<4)) && ((++count) < 3));
 }
 
