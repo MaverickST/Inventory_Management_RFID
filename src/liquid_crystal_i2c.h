@@ -12,11 +12,13 @@
 #define __LIQUID_CRYSTAL_I2C_H__
 
 #include <stdint.h>
+
 #include "pico.h"
 #include "hardware/i2c.h"
 #include "hardware/gpio.h"
 //#include "pico/binary_info.h"
 
+#include "functs.h"
 
 /**
  * \addtogroup LCD constants
@@ -90,6 +92,8 @@ typedef struct{
     uint8_t display;    ///< Display state
     uint8_t cursor;     ///< Cursor state
     char *temp_message; ///< Temporary message buffer
+    uint8_t num_alarm;  ///< Number of alarms of the LCD
+    uint8_t pos_secuence; ///< Position of the initialization sequence
 }lcd_t;
 
 /**
@@ -162,6 +166,6 @@ void lcd_send_char(lcd_t *lcd, uint8_t character);
  */
 void lcd_send_str(lcd_t *lcd, uint8_t *str);
 
-
+void lcd_init_sequence_callback(lcd_t *lcd);
 
 #endif // __LIQUID_CRYSTAL_I2C_H__
