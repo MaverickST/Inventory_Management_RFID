@@ -103,7 +103,7 @@ void kp_decode(key_pad_t *kpad){
 
 void kp_capture(key_pad_t *kpad){
 
-    if (!kpad->KEY.en) return;
+    // if (!kpad->KEY.en) return;
 
     kpad->KEY.ckey = (kpad->cols >> 2) | (kpad->rows >> 2);
     kp_decode(kpad);
@@ -158,14 +158,15 @@ void kp_set_irq_rows(key_pad_t *kpad)
     gpio_put_masked(0x0000000F << kpad->KEY.clsb, 0x0000000F << kpad->KEY.clsb); // cols as high
 
     // Initialize interrupts
-    gpio_set_irq_enabled_with_callback(kpad->KEY.rlsb + 0, GPIO_IRQ_LEVEL_HIGH, true, gpioCallback);
-    gpio_set_irq_enabled_with_callback(kpad->KEY.rlsb + 1, GPIO_IRQ_LEVEL_HIGH, true, gpioCallback);
-    gpio_set_irq_enabled_with_callback(kpad->KEY.rlsb + 2, GPIO_IRQ_LEVEL_HIGH, true, gpioCallback);
-    gpio_set_irq_enabled_with_callback(kpad->KEY.rlsb + 3, GPIO_IRQ_LEVEL_HIGH, true, gpioCallback);
+    // gpio_set_irq_enabled_with_callback(kpad->KEY.rlsb + 0, GPIO_IRQ_LEVEL_HIGH, true, gpioCallback);
+    // gpio_set_irq_enabled_with_callback(kpad->KEY.rlsb + 1, GPIO_IRQ_LEVEL_HIGH, true, gpioCallback);
+    // gpio_set_irq_enabled_with_callback(kpad->KEY.rlsb + 2, GPIO_IRQ_LEVEL_HIGH, true, gpioCallback);
+    // gpio_set_irq_enabled_with_callback(kpad->KEY.rlsb + 3, GPIO_IRQ_LEVEL_HIGH, true, gpioCallback);
 }
 
 void kp_dbnc_set_alarm(key_pad_t *kpad)
 {
+    if (!kpad->KEY.dbnc) return;
     // Interrupt acknowledge
     hw_clear_bits(&timer_hw->intr, 1u << TIMER_IRQ_1);
 

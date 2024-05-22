@@ -79,12 +79,15 @@
 
 int main() {
     stdio_init_all();
+    sleep_ms(5000);
     printf("Run Program\n");
 
     // Initialize global variables: keypad, signal generator, button, and DAC.
     initGlobalVariables();
 
-    // irq_set_priority(PWM_IRQ_WRAP, 0xC0);
+    // Set alarm
+    printf("Set tag alarm\n");
+    check_tag_timer_handler();
 
     while(1){
         while(check()){

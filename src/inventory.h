@@ -51,6 +51,20 @@ void inventory_store(inventory_t *inv);
 void inventory_load(inventory_t *inv);
 
 /**
+ * @brief Definition of the wrapper function for the flash_safe_execute function,
+ * which is used to erase the last sector of the flash memory.
+ * 
+ */
+void invetory_wrapper();
+
+/**
+ * @brief Auxiliary function to print the data of the inventory
+ * 
+ * @param data 
+ */
+void inventory_print_data(uint32_t *data);
+
+/**
  * @brief Perform a inbound transaction.
  * The parameters are each of the values stored in the tag.
  * 
