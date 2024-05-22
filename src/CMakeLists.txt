@@ -33,7 +33,8 @@ target_link_libraries(invmanage
 	hardware_pwm 
 	hardware_irq 
 	hardware_sync
-	hardware_i2c)
+	hardware_i2c
+	hardware_spi)
 
 pico_enable_stdio_uart(invmanage 0)
 pico_enable_stdio_usb(invmanage 1)

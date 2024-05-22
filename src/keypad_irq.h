@@ -33,7 +33,7 @@ typedef struct{
     uint32_t dbnc_time;         ///< Debouncer time
     uint32_t rows;              ///< Value of the gpios connected to the keypad rows
     uint32_t cols;              ///< Value of the gpios connected to the keypad cols
-    uint8_t timer_irq;         ///< Alarm timer IRQ number
+    uint8_t timer_irq;         ///< Alarm timer IRQ number (TIMER_IRQ_0)
 }key_pad_t;
 
 

@@ -82,7 +82,7 @@ void check_tag_timer_handler(void);
  * @brief Handler for the I2C interruptions.
  * 
  */
-void i2c_handler(void);
+// void i2c_handler(void);
 
 // -------------------------------------------------------------
 // ---------------------- Check functions ----------------------
