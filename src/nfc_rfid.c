@@ -142,7 +142,7 @@ void nfc_init_as_spi(nfc_rfid_t *nfc, spi_inst_t *_spi, uint8_t sck, uint8_t mos
 
     // Reset configuration
     gpio_init(rst);
-    gpio_set_dir(rst, GPIO_IN);
+    // gpio_set_dir(rst, GPIO_IN);
     gpio_put(rst, 0);
     sleep_ms(1000);
     gpio_put(rst, 1);
@@ -154,7 +154,7 @@ void nfc_init_as_spi(nfc_rfid_t *nfc, spi_inst_t *_spi, uint8_t sck, uint8_t mos
     gpio_put(cs, 1); ///< Set the CS pin to high
 
     // Configuring the ARM Primecell Synchronous Serial Port (SSP)
-    uint baud = spi_init(_spi, 4 * 1000 * 1000); ///< Initialize the SPI bus with a speed of 4 Mbps
+    uint baud = spi_init(_spi, 1000000); ///< Initialize the SPI bus with a speed of 4 Mbps
     printf("SPI baud: %d\n", baud);
     spi_set_format(_spi, 8, 0, 0, SPI_MSB_FIRST);
     gpio_set_function(sck,  GPIO_FUNC_SPI);
@@ -201,13 +201,11 @@ bool nfc_is_new_tag(nfc_rfid_t *nfc)
     uint8_t bufferATQA[2];
 	uint8_t bufferSize = sizeof(bufferATQA);
 
-    // Reset baud rates
-    printf("Reset baud rates\n");
-    nfc_write(nfc, TxModeReg, 0x00);
-    nfc_write(nfc, RxModeReg, 0x00);
-    // Reset ModWidthReg
-    nfc_write(nfc, ModWidthReg, 0x26);
-    printf("Checking...\n");
+    // // Reset baud rates
+    // nfc_write(nfc, TxModeReg, 0x00);
+    // nfc_write(nfc, RxModeReg, 0x00);
+    // // Reset ModWidthReg
+    // nfc_write(nfc, ModWidthReg, 0x26);
 
     StatusCode result = nfc_requestA(nfc, bufferATQA, &bufferSize);
 
@@ -258,7 +256,7 @@ uint8_t nfc_communicate(nfc_rfid_t *nfc, uint8_t command, uint8_t waitIRq, uint8
     nfc_write(nfc, BitFramingReg, bitFraming); // Bit adjustments
     nfc_write(nfc, CommandReg, command); // Execute the command
     if (command == PCD_Transceive) {
-        // // nfc_set_reg_bitmask(nfc, BitFramingReg, 0x80); // StartSend=1, transmission of data starts
+        nfc_set_reg_bitmask(nfc, BitFramingReg, 0x80); // StartSend=1, transmission of data starts
     }
 
     // In PCD_Init() we set the TAuto flag in TModeReg. This means the timer

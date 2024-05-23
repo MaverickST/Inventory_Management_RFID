@@ -323,7 +323,6 @@ static inline void nfc_clear_reg_bitmask(nfc_rfid_t *nfc, uint8_t reg, uint8_t m
 static inline void nfc_set_reg_bitmask(nfc_rfid_t *nfc, uint8_t reg, uint8_t mask)
 {
     uint8_t value = nfc_read(nfc, reg);
-    sleep_ms(10);
     nfc_write(nfc, reg, (uint8_t)(value | mask));
 }
 

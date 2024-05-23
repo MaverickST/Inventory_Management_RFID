@@ -32,7 +32,7 @@
 #define PIN_MOSI 11
 #define PIN_MISO 12
 #define PIN_CS 13
-#define PIN_IRQ 14
+#define PIN_IRQ 0
 #define PIN_RST 16
 
 // I2C pins
@@ -56,7 +56,7 @@ void initGlobalVariables(void)
     led_init(&gLed, 18);
     kp_init(&gKeyPad, 2, 6, 100000, true);
     // nfc_init_as_i2c(&gNFC, i2c1, 14, 15, 12, 11);
-    nfc_init_as_spi(&gNFC, spi0, PIN_SCK, PIN_MOSI, PIN_MISO, PIN_CS, PIN_IRQ, PIN_RST);
+    nfc_init_as_spi(&gNFC, spi1, PIN_SCK, PIN_MOSI, PIN_MISO, PIN_CS, PIN_IRQ, PIN_RST);
     inventory_init(&gInventory, false);
 }
 
@@ -355,7 +355,7 @@ void check_tag_timer_handler(void)
 
     // Check for a tag entering
     printf("Check for a tag entering\n");
-    if (!gTag_entering){
+    if (!gTag_entering && nfc_is_new_tag(&gNFC)){
         gTag_entering = true;
         printf("Tag entering \n");
     }
