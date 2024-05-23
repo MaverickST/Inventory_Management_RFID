@@ -142,7 +142,7 @@ enum PCD_Register{
 };
 
 // Commands sent to the PICC.
-enum PICC_Command{
+typedef enum _PICC_Command{
     // The commands used by the PCD to manage communication with several PICCs (ISO 14443-3, Type A, section 6.4)
     PICC_CMD_REQA			= 0x26,		// REQuest command, Type A. Invites PICCs in state IDLE to go to READY and prepare for anticollision or selection. 7 bit frame.
     PICC_CMD_WUPA			= 0x52,		// Wake-UP command, Type A. Invites PICCs in state IDLE and HALT to go to READY(*) and prepare for anticollision or selection. 7 bit frame.
@@ -166,11 +166,11 @@ enum PICC_Command{
     // The commands used for MIFARE Ultralight (from http://www.nxp.com/documents/data_sheet/MF0ICU1.pdf, Section 8.6)
     // The PICC_CMD_MF_READ and PICC_CMD_MF_WRITE can also be used for MIFARE Ultralight.
     PICC_CMD_UL_WRITE		= 0xA2		// Writes one 4 byte page to the PICC.
-};
+}PICC_Command;
 
 // Return codes from the functions in this class. Remember to update GetStatusCodeName() if you add more.
 // last value set to 0xff, then compiler uses less ram, it seems some optimisations are triggered
-enum StatusCode{
+typedef enum _StatusCode{
     STATUS_OK				,	// Success
     STATUS_ERROR			,	// Error in communication
     STATUS_COLLISION		,	// Collission detected
@@ -180,10 +180,10 @@ enum StatusCode{
     STATUS_INVALID			,	// Invalid argument.
     STATUS_CRC_WRONG		,	// The CRC_A does not match
     STATUS_MIFARE_NACK		= 0xff	// A MIFARE PICC responded with NAK.
-};
+}StatusCode;
 
 // MFRC522 commands. Described in chapter 10 of the datasheet.
-enum PCD_Command {
+typedef enum _PCD_Command {
     PCD_Idle				= 0x00,		// no action, cancels current command execution
     PCD_Mem					= 0x01,		// stores 25 bytes into the internal buffer
     PCD_GenerateRandomID	= 0x02,		// generates a 10-byte random ID number
@@ -193,8 +193,9 @@ enum PCD_Command {
     PCD_Receive				= 0x08,		// activates the receiver circuits
     PCD_Transceive 			= 0x0C,		// transmits data from FIFO buffer to antenna and automatically activates the receiver after transmission
     PCD_MFAuthent 			= 0x0E,		// performs the MIFARE standard authentication as a reader
-    PCD_SoftReset			= 0x0F		// resets the MFRC522
-};
+    PCD_SoftReset			= 0x0F,		// resets the MFRC522
+    PCD_EnableSelfTest      = 0x09
+}PCD_Command;
 // ISO/IEC 14443-4 bit rates
 enum TagBitRates {
     BITRATE_106KBITS = 0x00,
@@ -202,6 +203,26 @@ enum TagBitRates {
     BITRATE_424KBITS = 0x02,
     BITRATE_848KBITS = 0x03
 };
+
+// MIFARE constants that does not fit anywhere else
+typedef enum _MIFARE_Misc {
+	MF_ACK          = 0xA, // The MIFARE Classic uses a 4 bit ACK/NAK. Any other value than 0xA is NAK.
+	MF_KEY_SIZE     = 6 // A Mifare Crypto1 key is 6 bytes.
+} MIFARE_Misc;
+
+typedef enum _PICC_Type {
+	PICC_TYPE_UNKNOWN,
+	PICC_TYPE_ISO_14443_4,		  // PICC compliant with ISO/IEC 14443-4
+	PICC_TYPE_ISO_18092,		  // PICC compliant with ISO/IEC 18092 (NFC)
+	PICC_TYPE_MIFARE_MINI,		  // MIFARE Classic protocol, 320 bytes
+	PICC_TYPE_MIFARE_1K,		  // MIFARE Classic protocol, 1KB
+	PICC_TYPE_MIFARE_4K,		  // MIFARE Classic protocol, 4KB
+	PICC_TYPE_MIFARE_UL,		  // MIFARE Ultralight or Ultralight C
+	PICC_TYPE_MIFARE_PLUS,		  // MIFARE Plus
+	PICC_TYPE_TNP3XXX,			  // Only mentioned in NXP AN 10833 MIFARE Type
+								  // Identification Procedure
+	PICC_TYPE_NOT_COMPLETE = 0xff // SAK indicates UID is not complete.
+} PICC_Type;
 
 
 #endif // __NFC_ENUMS_

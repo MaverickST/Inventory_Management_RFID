@@ -134,41 +134,40 @@ void nfc_init_as_spi(nfc_rfid_t *nfc, spi_inst_t *_spi, uint8_t sck, uint8_t mos
     } else if (_spi == spi1){
         nfc->spi_irq = SPI1_IRQ;
     }
+    // Initialize the SPI buffer
+    for (int i = 0; i < BUFFER_SIZE; i++) {
+		nfc->Rx_Buf[i] = 0;
+		nfc->Tx_Buf[i] = 0;
+	}
 
-    // Configuring the ARM Primecell Synchronous Serial Port (SSP)
-    uint baud = spi_init(_spi, 4 * 1000 * 1000); ///< Initialize the SPI bus with a speed of 4 Mbps
-    printf("SPI baud: %d\n", baud);
-    gpio_set_function(sck, GPIO_FUNC_SPI);
-    gpio_set_function(mosi, GPIO_FUNC_SPI);
-    gpio_set_function(miso, GPIO_FUNC_SPI);
+    // Reset configuration
+    gpio_init(rst);
+    gpio_set_dir(rst, GPIO_IN);
+    gpio_put(rst, 0);
+    sleep_ms(1000);
+    gpio_put(rst, 1);
+	sleep_ms(50);
 
     // Chip select is active-low, so we'll initialise it to a driven-high state
     gpio_init(cs);
     gpio_set_dir(cs, GPIO_OUT);
     gpio_put(cs, 1); ///< Set the CS pin to high
 
-    // Reset configuration
-    gpio_init(rst);
-    gpio_set_dir(rst, GPIO_IN);
-    if (gpio_get(rst) == 0){ ///< The MFRC522 chip is in power down mode.
-        printf("The MFRC522 chip is in power down mode\n");
-        gpio_set_dir(rst, GPIO_OUT); ///< Now set the resetPowerDownPin as digital output.
-        gpio_put(rst, 0); ///< Make sure we have a clean LOW state.
-        sleep_us(2);
-        gpio_put(rst, 1); ///< Exit power down mode. This triggers a hard reset
-        // Section 8.8.2 in the datasheet says the oscillator start-up time is the start up time 
-        // of the crystal + 37,74μs. Let us be generous: 50ms.
-        sleep_ms(50);
-    }else { ///< Perform a soft reset
-        printf("Performing a soft reset\n");
-        nfc_reset(nfc);
-    }
+    // Configuring the ARM Primecell Synchronous Serial Port (SSP)
+    uint baud = spi_init(_spi, 4 * 1000 * 1000); ///< Initialize the SPI bus with a speed of 4 Mbps
+    printf("SPI baud: %d\n", baud);
+    spi_set_format(_spi, 8, 0, 0, SPI_MSB_FIRST);
+    gpio_set_function(sck,  GPIO_FUNC_SPI);
+    gpio_set_function(mosi, GPIO_FUNC_SPI);
+    gpio_set_function(miso, GPIO_FUNC_SPI);
 
-    // Reset baud rates
-    nfc_write(nfc, TxModeReg, 0x00);
-    nfc_write(nfc, RxModeReg, 0x00);
-    // Reset ModWidthReg
-    nfc_write(nfc, ModWidthReg, 0x26);
+    nfc_write(nfc, CommandReg, PCD_SoftReset); // Perform a soft reset
+
+    // // Reset baud rates
+    // nfc_write(nfc, TxModeReg, 0x00);
+    // nfc_write(nfc, RxModeReg, 0x00);
+    // // Reset ModWidthReg
+    // nfc_write(nfc, ModWidthReg, 0x26);
 
     // When communicating with a PICC we need a timeout if something goes wrong.
 	// f_timer = 13.56 MHz / (2*TPreScaler+1) where TPreScaler = [TPrescaler_Hi:TPrescaler_Lo].
@@ -201,7 +200,6 @@ bool nfc_is_new_tag(nfc_rfid_t *nfc)
 {
     uint8_t bufferATQA[2];
 	uint8_t bufferSize = sizeof(bufferATQA);
-    uint8_t result;
 
     // Reset baud rates
     printf("Reset baud rates\n");
@@ -211,7 +209,7 @@ bool nfc_is_new_tag(nfc_rfid_t *nfc)
     nfc_write(nfc, ModWidthReg, 0x26);
     printf("Checking...\n");
 
-    result = nfc_requestA(nfc, bufferATQA, &bufferSize);
+    StatusCode result = nfc_requestA(nfc, bufferATQA, &bufferSize);
 
     printf("Result: %d\n", result);
 
@@ -260,41 +258,41 @@ uint8_t nfc_communicate(nfc_rfid_t *nfc, uint8_t command, uint8_t waitIRq, uint8
     nfc_write(nfc, BitFramingReg, bitFraming); // Bit adjustments
     nfc_write(nfc, CommandReg, command); // Execute the command
     if (command == PCD_Transceive) {
-        // nfc_set_reg_bitmask(nfc, BitFramingReg, 0x80); // StartSend=1, transmission of data starts
+        // // nfc_set_reg_bitmask(nfc, BitFramingReg, 0x80); // StartSend=1, transmission of data starts
     }
 
     // In PCD_Init() we set the TAuto flag in TModeReg. This means the timer
 	// automatically starts when the PCD stops transmitting.
-	//
-	// Wait here for the command to complete. The bits specified in the
-	// `waitIRq` parameter define what bits constitute a completed command.
-	// When they are set in the ComIrqReg register, then the command is
-	// considered complete. If the command is not indicated as complete in
-	// ~36ms, then consider the command as timed out.
 
-    const uint32_t deadline = time_us_32()/1000 + 36; // 36 ms, 1 ms is 1000 us
-    bool completed = false;
+    uint8_t n;
+	unsigned int i;
 
-    do {
-        uint8_t n;
-        // nfc_read(nfc, ComIrqReg, &n); ///< ComIrqReg[7..0] bits are: Set1 TxIRq RxIRq IdleIRq HiAlertIRq LoAlertIRq ErrIRq TimerIRq
-        if (n & waitIRq) { ///< One of the interrupts that signal success has been set.
-            completed = true;
-            break;
-        }
-        if (n & 0x01) { ///< Timer interrupt - nothing received in 25ms
-            return STATUS_TIMEOUT;
-        }
-    } while (time_us_32()/1000 < deadline);
-
-    // 36ms and nothing happened. Communication with the MFRC522 might be down.
-    if (!completed) { ///< The command hasn't completed in 36ms
-        return STATUS_TIMEOUT;
-    }
+    // Wait for the command to complete.
+	// In PCD_Init() we set the TAuto flag in TModeReg. This means the timer
+	// automatically starts when the PCD stops transmitting.
+	// Each iteration of the do-while-loop takes 17.86us.
+	i = 2000;
+	while (1) {
+		n = nfc_read(nfc, ComIrqReg); // ComIrqReg[7..0] bits are: Set1
+											   // TxIRq RxIRq IdleIRq HiAlertIRq
+											   // LoAlertIRq ErrIRq TimerIRq
+		if (n & waitIRq) { // One of the interrupts that signal success has been
+						   // set.
+			break;
+		}
+		if (n & 0x01) { // Timer interrupt - nothing received in 25ms
+			return STATUS_TIMEOUT;
+		}
+		if (--i == 0) { // The emergency break. If all other conditions fail we
+						// will eventually terminate on this one after 35.7ms.
+						// Communication with the MFRC522 might be down.
+			return STATUS_TIMEOUT;
+		}
+	}
 
     // Stop now if any errors except collisions were detected.
-    uint8_t errorRegValue;
-    nfc_read(nfc, ErrorReg, &errorRegValue); ///< ErrorReg[7..0] bits are: WrErr TempErr reserved BufferOvfl CollErr CRCErr ParityErr ProtocolErr
+    uint8_t errorRegValue = nfc_read(nfc, ErrorReg); ///< ErrorReg[7..0] bits are: WrErr TempErr reserved BufferOvfl CollErr CRCErr ParityErr ProtocolErr
+
     if (errorRegValue & 0x13) { ///< BufferOvfl ParityErr ProtocolErr
         return STATUS_ERROR;
     }
@@ -303,16 +301,14 @@ uint8_t nfc_communicate(nfc_rfid_t *nfc, uint8_t command, uint8_t waitIRq, uint8
 
     // If the caller wants data back, get it from the MFRC522.
     if (backData && backLen) {
-        uint8_t n;
-        nfc_read(nfc, FIFOLevelReg, &n); ///< Number of bytes in the FIFO
+        n = nfc_read(nfc, FIFOLevelReg); ///< Number of bytes in the FIFO
         printf("Comunicate - n: %d, backLen: %d\n", n, *backLen);
         if (n > *backLen) {
             return STATUS_NO_ROOM;
         }
         *backLen = n; ///< Number of bytes returned
-        // nfc_read_mult(nfc, FIFODataReg, backData, n, rxAlign); ///< Get received data from FIFO
-        nfc_read(nfc, ControlReg, &_validBits); ///< RxLastBits[2:0] indicates the number of valid bits in the last received byte. If this value is 000b, the whole byte is valid.
-        _validBits = _validBits & 0x07;
+        nfc_read_mult(nfc, FIFODataReg, backData, n, rxAlign); ///< Get received data from FIFO
+        _validBits = nfc_read(nfc, ControlReg) & 0x07; ///< RxLastBits[2:0] indicates the number of valid bits in the last received byte. If this value is 000b, the whole byte is valid
         if (validBits) {
             *validBits = _validBits;
         }
@@ -335,7 +331,7 @@ uint8_t nfc_communicate(nfc_rfid_t *nfc, uint8_t command, uint8_t waitIRq, uint8
         }
         // Verify CRC_A - do our own calculation and store the control in controlBuffer.
         uint8_t controlBuffer[2];
-        uint8_t status = nfc_calculate_crc(nfc, &backData[0], *backLen - 2, &controlBuffer[0]); // (it is not done)
+        StatusCode status = nfc_calculate_crc(nfc, &backData[0], *backLen - 2, &controlBuffer[0]); // (it is not done)
         if (status != STATUS_OK) {
             return status;
         }
@@ -350,12 +346,12 @@ uint8_t nfc_communicate(nfc_rfid_t *nfc, uint8_t command, uint8_t waitIRq, uint8
 uint8_t nfc_requestA_or_wakeupA(nfc_rfid_t *nfc, uint8_t command, uint8_t *bufferATQA, uint8_t *bufferSize)
 {
     uint8_t validBits;
-    uint8_t status;
+    StatusCode status;
 
     if (bufferATQA == NULL || *bufferSize < 2) { // The ATQA response is 2 bytes long.
         return STATUS_NO_ROOM;
     }
-    // nfc_clear_reg_bitmask(nfc, CollReg, 0x80); // ValuesAfterColl=1 => Bits received after collision are cleared.
+    nfc_clear_reg_bitmask(nfc, CollReg, 0x80); // ValuesAfterColl=1 => Bits received after collision are cleared.
     validBits = 7;
     status = nfc_transceive_data(nfc, &command, 1, bufferATQA, bufferSize, &validBits, 0, false);
     if (status != STATUS_OK) {
@@ -413,7 +409,7 @@ void nfc_config_blocking(nfc_rfid_t *nfc)
     }
 }
 
-uint8_t nfc_calculate_crc(nfc_rfid_t *nfc, uint8_t *data, uint8_t len, uint8_t *result)
+StatusCode nfc_calculate_crc(nfc_rfid_t *nfc, uint8_t *data, uint8_t len, uint8_t *result)
 {
     return 0;
 }
