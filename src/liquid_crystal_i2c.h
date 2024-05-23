@@ -14,6 +14,7 @@
 #include <stdint.h>
 
 #include "pico.h"
+
 #include "hardware/i2c.h"
 #include "hardware/gpio.h"
 //#include "pico/binary_info.h"
@@ -94,6 +95,7 @@ typedef struct{
     char *temp_message; ///< Temporary message buffer
     uint8_t num_alarm;  ///< Number of alarms of the LCD
     uint8_t pos_secuence; ///< Position of the initialization sequence
+    bool en;            ///< Flag to check if the LCD is able to send data
 }lcd_t;
 
 /**
@@ -166,6 +168,14 @@ void lcd_send_char(lcd_t *lcd, uint8_t character);
  */
 void lcd_send_str(lcd_t *lcd, uint8_t *str);
 
-void lcd_init_sequence_callback(lcd_t *lcd);
+/**
+ * @brief Send a string to the LCD at a specific position
+ * 
+ * @param lcd Pointer to the LCD structure
+ * @param str String to be sent
+ * @param row Number of the row position for the cursor
+ * @param col Number of the column position for the cursor
+ */
+void lcd_send_str_cursor(lcd_t *lcd, uint8_t *str, uint8_t row, uint8_t col);
 
 #endif // __LIQUID_CRYSTAL_I2C_H__

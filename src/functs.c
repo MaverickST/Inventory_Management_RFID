@@ -25,7 +25,7 @@
 #include "gpio_led.h"
 #include "nfc_rfid.h"
 #include "inventory.h"
-// #include "liquid_crystal_i2c.h"
+#include "liquid_crystal_i2c.h"
 
 // SPI pins
 #define PIN_SCK 10
@@ -35,7 +35,11 @@
 #define PIN_IRQ 14
 #define PIN_RST 16
 
-// lcd_t gLcd;
+// I2C pins
+#define PIN_SDA 14
+#define PIN_SCL 15
+
+lcd_t gLcd;
 led_rgb_t gLed;
 key_pad_t gKeyPad;
 nfc_rfid_t gNFC;
@@ -47,7 +51,7 @@ flags_t gFlags; ///< Global variable that stores the flags of the interruptions 
 
 void initGlobalVariables(void)
 {
-    // lcd_init(&gLcd, 0x20, i2c0, 16, 2, 100, 12, 13);
+    lcd_init(&gLcd, 0x20, i2c1, 16, 2, 100, PIN_SDA, PIN_SCL);
     gFlags.W = 0x00U;
     led_init(&gLed, 18);
     kp_init(&gKeyPad, 2, 6, 100000, true);
@@ -339,8 +343,7 @@ void led_timer_handler(void)
 
 void check_tag_timer_handler(void)
 {
-    printf("Check tag handler\n");
-    printf("Check tag handler 2\n");
+    lcd_send_str_cursor(&gLcd, "Check tag handler", 0, 0);
     // Set the alarm
     hw_clear_bits(&timer_hw->intr, 1u << gNFC.timer_irq);
     // Setting the IRQ handler
@@ -351,7 +354,7 @@ void check_tag_timer_handler(void)
 
     // Check for a tag entering
     printf("Check for a tag entering\n");
-    if (!gTag_entering && nfc_is_new_tag(&gNFC)){
+    if (!gTag_entering){
         gTag_entering = true;
         printf("Tag entering \n");
     }
@@ -382,3 +385,87 @@ void check_tag_timer_handler(void)
 //     ///< Clear the interrupt
 //     gNFC.i2c->hw->clr_intr;
 // }
+
+void lcd_send_str_callback(void)
+{   
+    printf("LCD Send str callback\n");
+    // Interrupt acknowledge
+    hw_clear_bits(&timer_hw->intr, 1u << gLcd.num_alarm);
+
+    // Send the string to the LCD
+    lcd_send_str(&gLcd, gLcd.temp_message);
+    gLcd.temp_message = NULL;
+
+}
+
+void lcd_initialization_timer_handler(void)
+{
+    // Interrupt acknowledge
+    hw_clear_bits(&timer_hw->intr, 1u << gLcd.num_alarm);
+
+    // position of the sequence
+    uint32_t time_next_secuence_us = 0;
+
+    // Initialisation sequence as per the Hitachi manual (Figure 24, p.46).
+    uint8_t lcd_function = (LCD_FUNCTION_SET | LCD_2LINE);
+    uint8_t lcd_entry_mode = (LCD_ENTRYMODESET | LCD_ENTRYLEFT);
+    uint8_t lcd_display_ctrl = (LCD_DISPLAY_CONTROL | LCD_DISPLAY_ON);
+    
+    
+    switch (gLcd.pos_secuence)
+    {
+    case 0:
+        lcd_send_byte(&gLcd, 0x03, LCD_COMMAND);
+        time_next_secuence_us = 5000;
+        break;
+    case 1:
+        lcd_send_byte(&gLcd, 0x03, LCD_COMMAND);
+        time_next_secuence_us = 100;
+        break;
+    case 2:
+        lcd_send_byte(&gLcd, 0x03, LCD_COMMAND);
+        time_next_secuence_us = 100;
+        break;
+    case 3:
+        lcd_send_byte(&gLcd, 0x02, LCD_COMMAND);
+        time_next_secuence_us = 150000;
+        break;
+    case 4:
+        // Function set
+        lcd_send_byte(&gLcd, lcd_entry_mode, LCD_COMMAND);
+        time_next_secuence_us = 40;
+        break;
+    case 5:
+        // Display control
+        lcd_send_byte(&gLcd, lcd_function, LCD_COMMAND);
+        time_next_secuence_us = 40;
+        break;
+    case 6:
+        // Entry mode
+        lcd_send_byte(&gLcd, lcd_display_ctrl, LCD_COMMAND);
+        time_next_secuence_us = 40;
+        break;
+    case 7:
+        // Display clear
+        lcd_clear_display(&gLcd);
+        time_next_secuence_us = 2000;
+        break;
+    case 8:
+        gLcd.en = true;
+        printf("LCD initialized\n");
+        break;
+    default:
+        break;
+    }
+
+    gLcd.pos_secuence++;
+
+    if (gLcd.pos_secuence <= 8)
+    {
+        // Setting the IRQ handler
+        irq_set_exclusive_handler(TIMER_IRQ_0, lcd_initialization_timer_handler);
+        irq_set_enabled(TIMER_IRQ_0, true);
+        hw_set_bits(&timer_hw->inte, 1u << gLcd.num_alarm); // Enable alarm0 for signal value calculation
+        timer_hw->alarm[gLcd.num_alarm] = (uint32_t)(time_us_64() + time_next_secuence_us); // Set alarm0 to trigger in t_sample
+    }
+}
