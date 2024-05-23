@@ -84,17 +84,7 @@ void check_tag_timer_handler(void);
  */
 // void i2c_handler(void);
 
-/**
- * @brief Handler fot the lcd timer interruptions.
- * 
- */
-void lcd_send_str_callback(void);
 
-/**
- * @brief Handler for the lcd initialization sequence.
- * 
- */
-void lcd_initialization_timer_handler(void);
 
 // -------------------------------------------------------------
 // ---------------------- Check functions ----------------------

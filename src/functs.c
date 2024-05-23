@@ -344,6 +344,7 @@ void led_timer_handler(void)
 void check_tag_timer_handler(void)
 {
     lcd_send_str_cursor(&gLcd, "Check tag handler", 0, 0);
+    lcd_send_str_cursor(&gLcd, "Maverick Loca", 1, 0);
     // Set the alarm
     hw_clear_bits(&timer_hw->intr, 1u << gNFC.timer_irq);
     // Setting the IRQ handler
@@ -386,86 +387,3 @@ void check_tag_timer_handler(void)
 //     gNFC.i2c->hw->clr_intr;
 // }
 
-void lcd_send_str_callback(void)
-{   
-    printf("LCD Send str callback\n");
-    // Interrupt acknowledge
-    hw_clear_bits(&timer_hw->intr, 1u << gLcd.num_alarm);
-
-    // Send the string to the LCD
-    lcd_send_str(&gLcd, gLcd.temp_message);
-    gLcd.temp_message = NULL;
-
-}
-
-void lcd_initialization_timer_handler(void)
-{
-    // Interrupt acknowledge
-    hw_clear_bits(&timer_hw->intr, 1u << gLcd.num_alarm);
-
-    // position of the sequence
-    uint32_t time_next_secuence_us = 0;
-
-    // Initialisation sequence as per the Hitachi manual (Figure 24, p.46).
-    uint8_t lcd_function = (LCD_FUNCTION_SET | LCD_2LINE);
-    uint8_t lcd_entry_mode = (LCD_ENTRYMODESET | LCD_ENTRYLEFT);
-    uint8_t lcd_display_ctrl = (LCD_DISPLAY_CONTROL | LCD_DISPLAY_ON);
-    
-    
-    switch (gLcd.pos_secuence)
-    {
-    case 0:
-        lcd_send_byte(&gLcd, 0x03, LCD_COMMAND);
-        time_next_secuence_us = 5000;
-        break;
-    case 1:
-        lcd_send_byte(&gLcd, 0x03, LCD_COMMAND);
-        time_next_secuence_us = 100;
-        break;
-    case 2:
-        lcd_send_byte(&gLcd, 0x03, LCD_COMMAND);
-        time_next_secuence_us = 100;
-        break;
-    case 3:
-        lcd_send_byte(&gLcd, 0x02, LCD_COMMAND);
-        time_next_secuence_us = 150000;
-        break;
-    case 4:
-        // Function set
-        lcd_send_byte(&gLcd, lcd_entry_mode, LCD_COMMAND);
-        time_next_secuence_us = 40;
-        break;
-    case 5:
-        // Display control
-        lcd_send_byte(&gLcd, lcd_function, LCD_COMMAND);
-        time_next_secuence_us = 40;
-        break;
-    case 6:
-        // Entry mode
-        lcd_send_byte(&gLcd, lcd_display_ctrl, LCD_COMMAND);
-        time_next_secuence_us = 40;
-        break;
-    case 7:
-        // Display clear
-        lcd_clear_display(&gLcd);
-        time_next_secuence_us = 2000;
-        break;
-    case 8:
-        gLcd.en = true;
-        printf("LCD initialized\n");
-        break;
-    default:
-        break;
-    }
-
-    gLcd.pos_secuence++;
-
-    if (gLcd.pos_secuence <= 8)
-    {
-        // Setting the IRQ handler
-        irq_set_exclusive_handler(TIMER_IRQ_0, lcd_initialization_timer_handler);
-        irq_set_enabled(TIMER_IRQ_0, true);
-        hw_set_bits(&timer_hw->inte, 1u << gLcd.num_alarm); // Enable alarm0 for signal value calculation
-        timer_hw->alarm[gLcd.num_alarm] = (uint32_t)(time_us_64() + time_next_secuence_us); // Set alarm0 to trigger in t_sample
-    }
-}

@@ -12,14 +12,12 @@
 #define __LIQUID_CRYSTAL_I2C_H__
 
 #include <stdint.h>
+#include <stdio.h>
 
 #include "pico.h"
-
 #include "hardware/i2c.h"
 #include "hardware/gpio.h"
 //#include "pico/binary_info.h"
-
-#include "functs.h"
 
 /**
  * \addtogroup LCD constants
@@ -97,6 +95,12 @@ typedef struct{
     uint8_t pos_secuence; ///< Position of the initialization sequence
     bool en;            ///< Flag to check if the LCD is able to send data
 }lcd_t;
+
+/**
+ * \var gLcd
+ * \brief Global variable for the LCD display
+ */
+extern lcd_t gLcd;
 
 /**
  * @brief Function to initialize the LCD display I2C
@@ -177,5 +181,17 @@ void lcd_send_str(lcd_t *lcd, uint8_t *str);
  * @param col Number of the column position for the cursor
  */
 void lcd_send_str_cursor(lcd_t *lcd, uint8_t *str, uint8_t row, uint8_t col);
+
+/**
+ * @brief Handler fot the lcd timer interruptions.
+ * 
+ */
+void lcd_send_str_callback(void);
+
+/**
+ * @brief Handler for the lcd initialization sequence.
+ * 
+ */
+void lcd_initialization_timer_handler(void);
 
 #endif // __LIQUID_CRYSTAL_I2C_H__
