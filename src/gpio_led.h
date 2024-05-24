@@ -43,7 +43,7 @@ static inline void led_init(led_rgb_t *led, uint8_t lsb_rgb)
     led->state = false;
     led->color = 0x00;
     led->time = 500000;
-    led->timer_irq = TIMER_IRQ_0;
+    led->timer_irq = TIMER_IRQ_2;
     gpio_init_mask(0x00000007 << lsb_rgb); // gpios for key rows 2,3,4,5
     gpio_set_dir_masked(0x00000007 << lsb_rgb, 0x00000007 << lsb_rgb); // rows as outputs
     gpio_put_masked(0x00000007 << lsb_rgb, 0x00000000);

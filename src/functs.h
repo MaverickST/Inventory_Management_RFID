@@ -21,10 +21,9 @@ typedef union{
     uint8_t W;
     struct{
         uint8_t key         :1; //keypad interruption pending
-        uint8_t nfc         :1; //tag interruption pending
-        uint8_t kpad_cols   :1; //keypad cols interruption pending
-        uint8_t kpad_rows   :1; //keypad rows interruption pending
-        uint8_t             :3;
+        uint8_t nfc_tag     :1; //tag interruption pending
+        uint8_t kpad_switch :1; //keypad switch interruption pending
+        uint8_t             :5;
     }B;
 }flags_t;
 
@@ -61,12 +60,6 @@ bool check();
 void gpioCallback(uint num, uint32_t mask);
 
 /**
- * @brief Handler for the debouncer timer interruptions.
- * 
- */
-void dbnc_timer_handler(void);
-
-/**
  * @brief Handler for the led timer interruptions.
  * 
  */
@@ -79,12 +72,22 @@ void led_timer_handler(void);
 void check_tag_timer_handler(void);
 
 /**
- * @brief Handler for the I2C interruptions.
+ * @brief This function initializes a PWM signal as a periodic interrupt timer (PIT).
+ * Each slice will generate interruptions at a period of milis miliseconds.
+ * Due to each slice share clock counter (period), events with diferents periods 
+ * must not be generated in the same slice, i.e, they must not share channel.
+ * 
+ * @param slice 
+ * @param milis Period of the PWM interruption in miliseconds
+ * @param enable 
+ */
+void initPWMasPIT(uint8_t slice, uint16_t milis, bool enable);
+
+/**
+ * @brief This function is the handler for the PWM interruptions.
  * 
  */
-// void i2c_handler(void);
-
-
+void pwm_handler(void);
 
 // -------------------------------------------------------------
 // ---------------------- Check functions ----------------------

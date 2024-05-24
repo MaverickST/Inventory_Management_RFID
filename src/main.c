@@ -85,6 +85,10 @@ int main() {
     // Initialize global variables: keypad, signal generator, button, and DAC.
     initGlobalVariables();
 
+    // Setup of the PWM as PIT
+    initPWMasPIT(0,100, false); // 100ms for the button debouncer
+    irq_set_exclusive_handler(PWM_IRQ_WRAP,pwm_handler);
+
     // Set alarm
     printf("Set tag alarm\n");
     check_tag_timer_handler();
