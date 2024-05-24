@@ -12,7 +12,6 @@
 #define __NFC_RFID_
 
 #include <stdint.h>
-#include "hardware/i2c.h"
 #include "hardware/spi.h"
 
 #include "nfc_enums.h"
@@ -37,13 +36,6 @@ typedef struct
     }tag;
 
     struct {
-        enum {dev_ADDRESS, reg_ADDRESS, data_SENT} tx       :2; // 0: device address sent, 1: register address sent, 2: data sent
-        enum {single_WRITE, mult_READ, single_READ} rw      :2; // 0: single write, 1: multiple read, 2: single read (number of fifo byte)
-    }i2c_fifo_stat;
-
-    struct {
-        uint8_t sda;
-        uint8_t scl;
         uint8_t irq;
         uint8_t rst;
         uint8_t sck;
@@ -67,34 +59,22 @@ typedef struct
     uint32_t timeCheck; ///< Time check (1s)
     uint8_t timer_irq; ///< Alarm timer IRQ number (TIMER_IRQ_1)
 
-    uint8_t fifo[64]; ///< Data of the nfc fifo
-    uint8_t nbf; ///< number of bytes in the nfc fifo (max 64)
-    uint8_t idx_fifo; ///< Index of the nfc fifo
-    uint8_t i2c_irq; ///< I2C IRQ number (23 or 24)
     uint8_t spi_irq; ///< SPI IRQ number (25 or 26)
-    i2c_inst_t *i2c; ///< I2C instance
     spi_inst_t *spi; ///< SPI instance
 
-    uint8_t version; ///< Version of the nfc
     uint8_t Tx_Buf[BUFFER_SIZE];
 	uint8_t Rx_Buf[BUFFER_SIZE];
+    Uid uid; ///< UID of the tag
+
+    uint8_t bufferRead[18]; ///< Buffer for the read data
+    uint8_t sizeRead; ///< Size of the read data
+    uint8_t blockAddr; ///< Block address
 
     enum {NONE, ADMIN, INV, USER} userType;
     
     
 }nfc_rfid_t;
 
-/**
- * @brief This function initializes the nfc_rfid_t structure
- * 
- * @param nfc 
- * @param _i2c i2c instance
- * @param sda gpio pin for the i2c sda
- * @param scl gpio pin for the i2c scl
- * @param irq gpio pin for the nfc irq
- * @param rst gpio pin for the nfc rst
- */
-void nfc_init_as_i2c(nfc_rfid_t *nfc, i2c_inst_t *_i2c, uint8_t sda, uint8_t scl, uint8_t irq, uint8_t rst);
 
 /**
  * @brief This function initializes the nfc_rfid_t structure as SPI
@@ -120,6 +100,59 @@ void nfc_init_as_spi(nfc_rfid_t *nfc, spi_inst_t *_spi, uint8_t sck, uint8_t mos
  * @return false 
  */
 bool nfc_is_new_tag(nfc_rfid_t *nfc);
+
+/**
+ * @brief 
+ * Executes the MFRC522 MFAuthent command.
+ * This command manages MIFARE authentication to enable a secure communication to any MIFARE Mini, MIFARE 1K and MIFARE 4K card.
+ * 
+ * @param nfc 
+ * @param command 
+ * @param blockAddr 
+ * @param keyByte ///< keyByte array of the NFC structure
+ * @param uid 
+ * @return StatusCode 
+ */
+StatusCode nfc_authenticate(nfc_rfid_t *nfc, uint8_t command, uint8_t blockAddr, uint8_t *keyByte, Uid *uid);
+
+/**
+ * @brief Transmits SELECT/ANTICOLLISION commands to select a single PICC.
+ * Before calling this function the PICCs must be placed in the READY(*) state
+ * by calling PICC_RequestA() or PICC_WakeupA().
+ * 
+ * @param nfc 
+ * @param uid 
+ * @param validBits 
+ * @return StatusCode 
+ */
+StatusCode nfc_select(nfc_rfid_t *nfc, Uid *uid, uint8_t validBits);
+
+/**
+ * @brief Reads a block of data from the active PICC.
+ * 
+ * @param nfc 
+ * @param blockAddr 
+ * @param buffer 
+ * @param bufferSize 
+ * @return StatusCode 
+ */
+StatusCode nfc_read_card(nfc_rfid_t *nfc, uint8_t blockAddr, uint8_t *buffer, uint8_t *bufferSize);
+
+/**
+ * @brief Simple wrapper around PICC_Select.
+ * Returns true if a UID could be read.
+ * Remember to call PICC_IsNewCardPresent(), PICC_RequestA() or PICC_WakeupA() first. 
+ * The read UID is available in the class variable uid.
+ * 
+ * @param nfc 
+ * @return true 
+ * @return false 
+ */
+static inline bool nfc_read_card_serial(nfc_rfid_t *nfc)
+{
+    StatusCode status = nfc_select(nfc, &nfc->uid, 0);
+    return (status == STATUS_OK);
+}
 
 /**
  * @brief Transfers data to the MFRC522 FIFO, executes a command, waits for completion and transfers data back from the FIFO.
@@ -357,6 +390,16 @@ static inline void nfc_reset(nfc_rfid_t *nfc)
 }
 
 /**
+ * @brief Stops the encrypted data communication on the NFC.
+ * 
+ * @param nfc 
+ */
+static inline void nfc_stop_crypto1(nfc_rfid_t *nfc)
+{
+    nfc_clear_reg_bitmask(nfc, Status2Reg, 0x08);
+}
+
+/**
  * @brief Use the CRC coprocessor in the MFRC522 to calculate a CRC_A.
  * 
  * @param nfc 
@@ -365,14 +408,7 @@ static inline void nfc_reset(nfc_rfid_t *nfc)
  * @param result 
  * @return uint8_t STATUS_OK on success, STATUS_??? otherwise.
  */
-uint8_t nfc_calculate_crc(nfc_rfid_t *nfc, uint8_t *data, uint8_t len, uint8_t *result);
-
-/**
- * @brief Callback function for the I2C interruption, which is called by the I2C handler.
- * 
- * @param nfc 
- */
-void nfc_i2c_callback(nfc_rfid_t *nfc);
+StatusCode nfc_calculate_crc(nfc_rfid_t *nfc, uint8_t *data, uint8_t len, uint8_t *result);
 
 /**
  * @brief From the nfc fifo, get the data tag.
@@ -380,54 +416,6 @@ void nfc_i2c_callback(nfc_rfid_t *nfc);
  * @param nfc 
  */
 void nfc_get_data_tag(nfc_rfid_t *nfc);
-
-/**
- * @brief This function allows to configure the MFRC522 IRQ from initilization a sequence on the I2C bus.
- * 
- * @param nfc 
- */
-static inline void nfc_config_mfrc522_irq(nfc_rfid_t *nfc)
-{
-    printf("Configuring the MFRC522 IRQ\n");
-    irq_set_enabled(nfc->i2c_irq, true);
-    nfc->i2c_fifo_stat.rw = single_WRITE; ///< Sigle write: configures de irq ping of the nfc
-    nfc->i2c_fifo_stat.tx = dev_ADDRESS; 
-    nfc->i2c->hw->enable = true; ///< Enable the DW_apb_i2c
-    nfc->i2c->hw->data_cmd = ADDRESS_SLAVE_MFRC522; ///< Write the slave address to the DW_apb_i2c
-}
-
-/**
- * @brief This function allows to get the number of bytes in the NFC FIFO.
- * 
- * @param nfc 
- */
-static inline void nfc_get_nbf(nfc_rfid_t *nfc)
-{
-    printf("Get number of bytes in the FIFO\n");
-    irq_set_enabled(nfc->i2c_irq, true);
-    nfc->i2c_fifo_stat.rw = single_READ; ///< Single read: read number of bytes of the FIFO
-    nfc->i2c_fifo_stat.tx = dev_ADDRESS; 
-    nfc->i2c->hw->enable = true; ///< Enable the DW_apb_i2c
-    nfc->i2c->hw->data_cmd = ADDRESS_SLAVE_MFRC522; ///< Write the slave address to the DW_apb_i2c
-}
-
-/**
- * @brief This function allows to get the data from the NFC FIFO.
- * 
- * @param nfc 
- */
-
-static inline void nfc_get_data_fifo(nfc_rfid_t *nfc)
-{
-    printf("Get data from the FIFO\n");
-    irq_set_enabled(nfc->i2c_irq, true);
-    nfc->i2c_fifo_stat.rw = mult_READ; // Multiple read
-    nfc->i2c_fifo_stat.tx = dev_ADDRESS;
-    nfc->i2c->hw->enable = true; ///< Enable the DW_apb_i2c
-    nfc->i2c->hw->data_cmd = ADDRESS_SLAVE_MFRC522; ///< Write the slave address to the DW_apb_i2c
-}
-
-void nfc_config_blocking(nfc_rfid_t *nfc);
 
 
 

@@ -183,7 +183,6 @@ void program(void)
                 in_value = 0;
                 // Led control
                 led_setup(&gLed, 0x02); ///<  Green color
-
             }
             // Finish the process
             else if (key == 0x0D && in_state_inv == inNONE && id_state_inv == idNONE) {
@@ -234,10 +233,10 @@ void program(void)
         }
     }
     ///< NFC interrupt flags
-    if (gNFC.flags.B.nbf){
-        nfc_get_nbf(&gNFC); ///< Init the process to get the number of bytes in the NFC FIFO
-        gNFC.flags.B.nbf = 0;
-    }
+    // if (gNFC.flags.B.nbf){
+    //     nfc_get_nbf(&gNFC); ///< Init the process to get the number of bytes in the NFC FIFO
+    //     gNFC.flags.B.nbf = 0;
+    // }
     // if (gNFC.flags.B.dfifo){
     //     nfc_get_data_fifo(&gNFC); ///< Init the proccess to get the data from the NFC FIFO
     //     gNFC.flags.B.dfifo = 0;
@@ -344,7 +343,6 @@ void led_timer_handler(void)
 void check_tag_timer_handler(void)
 {
     lcd_send_str_cursor(&gLcd, "Check tag handler", 0, 0);
-    lcd_send_str_cursor(&gLcd, "Maverick Loca", 1, 0);
     // Set the alarm
     hw_clear_bits(&timer_hw->intr, 1u << gNFC.timer_irq);
     // Setting the IRQ handler
@@ -354,36 +352,33 @@ void check_tag_timer_handler(void)
     timer_hw->alarm[gNFC.timer_irq] = (uint32_t)(time_us_64() + gNFC.timeCheck); ///< Set alarm1 to trigger in 1s
 
     // Check for a tag entering
-    printf("Check for a tag entering\n");
     if (!gTag_entering && nfc_is_new_tag(&gNFC)){
         gTag_entering = true;
-        printf("Tag entering \n");
-    }
-    else {
-        printf("There is no a tag entering\n");
+        nfc_read_card_serial(&gNFC); ///< Read the serial number of the card
+        // Print the serial number of the card
+        printf("\nCard UID: ");
+        for (int i = 0; i < gNFC.uid.size; i++) {
+            printf("%02X", gNFC.uid.uidByte[i]);
+        }
+        printf("\n");
+        // Check if the card is a Mifare Classic card
+        if(nfc_authenticate(&gNFC, PICC_CMD_MF_AUTH_KEY_A, gNFC.blockAddr, &gNFC.keyByte[0], &(gNFC.uid))==0){
+            if(nfc_read_card(&gNFC, gNFC.blockAddr, gNFC.bufferRead, &gNFC.sizeRead)==0){
+                led_setup(&gLed, 0x02); ///<  Green color
+                printf("Block readed\n\r");
+                for (int i = 0; i < 16; i++) {
+                    printf("%02x ", gNFC.bufferRead[i]);
+                }
+                printf("\n");
+                nfc_stop_crypto1(&gNFC);
+                printf( "\n");
+            }else{
+                led_setup(&gLed, 0x04); ///< Red color
+            }
+        }else {
+            led_setup(&gLed, 0x04); ///< Red color
+        }
     }
 }
 
-// void i2c_handler(void)
-// {
-//     // Check for an abort condition
-//     uint32_t abort_reason = gNFC.i2c->hw->tx_abrt_source;
-//     if (abort_reason){
-//         ///< Note clearing the abort flag also clears the reason, and
-//         ///< this instance of flag is clear-on-read! Note also the
-//         ///< IC_CLR_TX_ABRT register always reads as 0.
-//         gNFC.i2c->hw->clr_tx_abrt;
-//         printf("Config - I2C abort reason: %08x\n", abort_reason);
-//         ///< nfc_config_mfrc522_irq(&gNFC);
-//         gNFC.i2c_fifo_stat.tx = 0;
-//         return;
-//     }
-//     // printf("I2C handler: %08x \n", gNFC.i2c->hw->raw_intr_stat);
-//     if (gNFC.i2c->hw->raw_intr_stat){
-//         nfc_i2c_callback(&gNFC);
-//     }
-
-//     ///< Clear the interrupt
-//     gNFC.i2c->hw->clr_intr;
-// }
 
