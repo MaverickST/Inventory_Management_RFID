@@ -29,11 +29,11 @@ void nfc_init_as_spi(nfc_rfid_t *nfc, spi_inst_t *_spi, uint8_t sck, uint8_t mos
     nfc->pinout.irq = irq;
     nfc->pinout.rst = rst;
     nfc->userType = INV;
-    nfc->flags.W = 0;
     nfc->timeCheck = 1000000; ///< 1s = 1000000 us
     nfc->timer_irq = TIMER_IRQ_1;
     nfc->blockAddr = 1;
     nfc->sizeRead = 18;
+	nfc->tag.is_present = false;
 
     nfc->spi = _spi;
     if (_spi == spi0){
@@ -62,7 +62,6 @@ void nfc_init_as_spi(nfc_rfid_t *nfc, spi_inst_t *_spi, uint8_t sck, uint8_t mos
 
     // Configuring the ARM Primecell Synchronous Serial Port (SSP)
     uint baud = spi_init(_spi, 1000000); ///< Initialize the SPI bus with a speed of 4 Mbps
-    printf("SPI baud: %d\n", baud);
     spi_set_format(_spi, 8, 0, 0, SPI_MSB_FIRST);
     gpio_set_function(sck,  GPIO_FUNC_SPI);
     gpio_set_function(mosi, GPIO_FUNC_SPI);
@@ -544,5 +543,29 @@ StatusCode nfc_calculate_crc(nfc_rfid_t *nfc, uint8_t *data, uint8_t len, uint8_
 
 void nfc_get_data_tag(nfc_rfid_t *nfc)
 {
+    // The first byte of bufferRead is the product ID.
+    nfc->tag.id = nfc->bufferRead[15];
+
+    nfc->tag.amount = (nfc->bufferRead[11] << 24) | (nfc->bufferRead[12] << 16) | (nfc->bufferRead[13] << 8) | nfc->bufferRead[14];
+    nfc->tag.purchase_v = (nfc->bufferRead[7] << 24) | (nfc->bufferRead[8] << 16) | (nfc->bufferRead[9] << 8) | nfc->bufferRead[10];
+    nfc->tag.sale_v = (nfc->bufferRead[3] << 24) | (nfc->bufferRead[4] << 16) | (nfc->bufferRead[5] << 8) | nfc->bufferRead[6];
+
+	printf("ID: %02x\n", nfc->tag.id);
+	printf("Amount: %08x\n", nfc->tag.amount);
+	printf("Purchase value: %08x\n", nfc->tag.purchase_v);
+	printf("Sale value: %08x\n", nfc->tag.sale_v);
+
+	// From the ID, we can determine the type of the user
+	if (nfc->tag.id == 0x07) {
+		nfc->userType = ADMIN;
+	} else if (nfc->tag.id == 0x06) {
+		nfc->userType = INV;
+	} else if (nfc->tag.id == 0x01 || nfc->tag.id == 0x02 || nfc->tag.id == 0x03 || nfc->tag.id == 0x04 || nfc->tag.id == 0x05) {
+		nfc->userType = USER;
+	} else {
+		// nfc->tag.is_present = false; ACTUALLY
+	}
+
+	
 }
 

@@ -33,6 +33,7 @@ typedef struct
         uint32_t amount;
         uint32_t purchase_v;
         uint32_t sale_v;
+        bool is_present; ///< Flag that indicates that a tag is being entered
     }tag;
 
     struct {
@@ -43,19 +44,8 @@ typedef struct
         uint8_t miso;
         uint8_t cs;
     }pinout;
-
-    union{
-        uint8_t W;
-        struct{
-            uint8_t nbf     :1; ///< get the number of bytes in the fifo interrupt pending
-            uint8_t dfifo   :1; ///< get the data from the nfc fifo interrupt pending
-            uint8_t dtag    :1; ///< get the data tag from the nfc fifo interrupt pending
-            uint8_t         :5;
-        }B;
-    }flags;
 	
     uint8_t keyByte[MF_KEY_SIZE]; ///< Mifare Crypto1 key	
-    TagInfo tagInfo; ///< Tag information
     uint32_t timeCheck; ///< Time check (1s)
     uint8_t timer_irq; ///< Alarm timer IRQ number (TIMER_IRQ_1)
 

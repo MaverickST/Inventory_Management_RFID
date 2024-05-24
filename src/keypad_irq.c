@@ -37,7 +37,7 @@ void kp_init(key_pad_t *kpad, uint8_t rlsb, uint8_t clsb, uint32_t dbnc_time, bo
     gDBNC_TIME = dbnc_time;
     kpad->KEY.dzero = 0;
     kpad->KEY.en = en;
-    kpad->timer_irq = TIMER_IRQ_2;
+    kpad->pwm_slice = 0;
 
     // Initialize keypad gpios
     gpio_init_mask(0x0000000F << kpad->KEY.rlsb); // gpios for key rows 2,3,4,5
@@ -164,17 +164,5 @@ void kp_set_irq_rows(key_pad_t *kpad)
     // gpio_set_irq_enabled_with_callback(kpad->KEY.rlsb + 3, GPIO_IRQ_LEVEL_HIGH, true, gpioCallback);
 }
 
-void kp_dbnc_set_alarm(key_pad_t *kpad)
-{
-    if (!kpad->KEY.dbnc) return;
-    // Interrupt acknowledge
-    hw_clear_bits(&timer_hw->intr, 1u << kpad->timer_irq);
-
-    // Setting the IRQ handler
-    irq_set_exclusive_handler(kpad->timer_irq, dbnc_timer_handler);
-    irq_set_enabled(kpad->timer_irq, true);
-    hw_set_bits(&timer_hw->inte, 1u << kpad->timer_irq); ///< Enable alarm1 for keypad debouncer
-    timer_hw->alarm[kpad->timer_irq] = (uint32_t)(time_us_64() + kpad->dbnc_time); ///< Set alarm1 to trigger in 100ms
-}
 
 

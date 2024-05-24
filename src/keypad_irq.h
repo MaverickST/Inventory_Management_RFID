@@ -33,7 +33,7 @@ typedef struct{
     uint32_t dbnc_time;         ///< Debouncer time
     uint32_t rows;              ///< Value of the gpios connected to the keypad rows
     uint32_t cols;              ///< Value of the gpios connected to the keypad cols
-    uint8_t timer_irq;         ///< Alarm timer IRQ number (TIMER_IRQ_0)
+    uint8_t pwm_slice;          ///< PWM slice number
 }key_pad_t;
 
 
@@ -92,13 +92,6 @@ void kp_set_irq_cols(key_pad_t *kpad);
  * @param kpad 
  */
 void kp_set_irq_rows(key_pad_t *kpad);
-
-/**
- * @brief Configures an alarm for the keypad debouncer
- * 
- * @param kpad 
- */
-void kp_dbnc_set_alarm(key_pad_t *kpad);
 
 /** 
  * \brief This method returns the value of the last pressed key in decimal coding

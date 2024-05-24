@@ -16,6 +16,7 @@
 #include "pico/stdlib.h"
 #include "pico/time.h"
 #include "hardware/timer.h"
+#include "hardware/pwm.h"
 #include "hardware/irq.h"
 #include "hardware/gpio.h"
 #include "hardware/sync.h"
@@ -44,8 +45,6 @@ led_rgb_t gLed;
 key_pad_t gKeyPad;
 nfc_rfid_t gNFC;
 inventory_t gInventory;
-
-bool gTag_entering = false; ///< Flag that indicates that a tag is being entered
 
 flags_t gFlags; ///< Global variable that stores the flags of the interruptions pending
 
@@ -93,7 +92,7 @@ void program(void)
                         led_setup(&gLed, 0x05); ///< Purple color
                     }else {
                         printf("Incorrect password\n");
-                        gTag_entering = false;
+                        gNFC.tag.is_present = false;
                         in_state_admin = adminNONE;
                         in_value = 0;
                         in_cont = 0;
@@ -111,7 +110,7 @@ void program(void)
             ///< Finish the process
             else if (key == 0x0D){
                 printf("Finished Admin process\n");
-                gTag_entering = false;
+                gNFC.tag.is_present = false;
                 in_state_admin = adminNONE;
                 in_value = 0;
                 in_cont = 0;
@@ -186,7 +185,7 @@ void program(void)
             }
             // Finish the process
             else if (key == 0x0D && in_state_inv == inNONE && id_state_inv == idNONE) {
-                gTag_entering = false;
+                gNFC.tag.is_present = false;
                 printf("Finished Inv User\n");
                 // Led control
                 led_setup(&gLed, 0x06); ///< Yellow color
@@ -216,7 +215,7 @@ void program(void)
             }
             ///< Finish the process
             else if (key == 0x0D) {
-                gTag_entering = false;
+                gNFC.tag.is_present = false;
                 printf("Finished User\n");
                 // Led control
                 led_setup(&gLed, 0x06); ///< Yellow color
@@ -233,36 +232,49 @@ void program(void)
         }
     }
     ///< NFC interrupt flags
-    // if (gNFC.flags.B.nbf){
-    //     nfc_get_nbf(&gNFC); ///< Init the process to get the number of bytes in the NFC FIFO
-    //     gNFC.flags.B.nbf = 0;
-    // }
-    // if (gNFC.flags.B.dfifo){
-    //     nfc_get_data_fifo(&gNFC); ///< Init the proccess to get the data from the NFC FIFO
-    //     gNFC.flags.B.dfifo = 0;
-    // }
-    // if (gNFC.flags.B.dtag){
-    //     nfc_get_data_tag(&gNFC); ///< From the nfc fifo, get the data tag
-    //     gNFC.flags.B.dtag = 0;
-    // }
-    ///< Keypad interrupt flags
-    if (gFlags.B.kpad_rows){
-        kp_set_irq_rows(&gKeyPad); ///< Switch interrupt to rows
-        gFlags.B.kpad_rows = 0;
+    if (gFlags.B.nfc_tag) {
+        gFlags.B.nfc_tag = 0; ///< Clear the flag
+        nfc_read_card_serial(&gNFC); ///< Read the serial number of the card
+        // Print the serial number of the card
+        printf("\nCard UID: ");
+        for (int i = 0; i < gNFC.uid.size; i++) {
+            printf("%02X", gNFC.uid.uidByte[i]);
+        }
+        printf("\n");
+        // Check if the card is a Mifare Classic card
+        if(nfc_authenticate(&gNFC, PICC_CMD_MF_AUTH_KEY_A, gNFC.blockAddr, &gNFC.keyByte[0], &(gNFC.uid))==0){
+            if(nfc_read_card(&gNFC, gNFC.blockAddr, gNFC.bufferRead, &gNFC.sizeRead)==0){
+                gNFC.tag.is_present = true;
+                printf("Block readed\n\r");
+                for (int i = 0; i < 16; i++) {
+                    printf("%02x ", gNFC.bufferRead[i]);
+                }
+                printf("\n");
+                nfc_stop_crypto1(&gNFC);
+                
+                led_setup(&gLed, 0x02); ///<  Green color
+                nfc_get_data_tag(&gNFC); ///< From the nfc fifo, get the data tag
+            }else{
+                led_setup(&gLed, 0x04); ///< Red color
+            }
+        }else {
+            led_setup(&gLed, 0x04); ///< Red color
+        }
     }
-    if (gFlags.B.kpad_cols){
+
+    ///< Keypad interrupt flags
+    if (gFlags.B.kpad_switch){
         gKeyPad.cols = gpio_get_all() & (0x0000000f << gKeyPad.KEY.clsb); ///< Get columns gpio values
         kp_set_irq_rows(&gKeyPad); ///< Switch interrupt to columns
         gKeyPad.rows = gpio_get_all() & (0x0000000f << gKeyPad.KEY.rlsb); ///< Get rows gpio values
-        gKeyPad.KEY.dbnc = 1; ///< Activate the debouncer
-        kp_dbnc_set_alarm(&gKeyPad); ///< Set the debouncer alarm
-        gFlags.B.kpad_cols = 0;
+        pwm_set_enabled(gKeyPad.pwm_slice, true); ///< Set the debouncer alarm
+        gFlags.B.kpad_switch = 0;
     }
 }
 
 bool check()
 {
-    if(gFlags.W | gNFC.flags.W){
+    if(gFlags.W){
         return true;
     }
     return false;
@@ -273,33 +285,14 @@ void gpioCallback(uint num, uint32_t mask)
     switch (mask)
     {
     case GPIO_IRQ_EDGE_RISE:
-        // Just one tag can be entering at the same time
-        if (num == gNFC.pinout.irq && !gTag_entering){
-            // gNFC.flags.B.nbf = 1; ///< Activate the flag to get the number of bytes in the NFC FIFO
-            gTag_entering = true;
-            printf("Tag entering - RISE\n");
-        }
-        // If a tag is entering, the columns are captured
-        else if (gTag_entering && !gKeyPad.KEY.dbnc){
+        if (gNFC.tag.is_present && !gKeyPad.KEY.dbnc){
             kp_set_irq_enabled(&gKeyPad, true, false); ///< Disable the columns interrupt
-            gFlags.B.kpad_cols = 1; ///< Activate the flag to switch the interrupt to columns
+            gKeyPad.KEY.dbnc = 1; ///< Activate the debouncer
+            gFlags.B.kpad_switch = 1; ///< Activate the flag to switch the interrupt to columns
         }
         else {
             printf("There is no a tag entering - RISE\n");
         }
-        break;
-
-    case GPIO_IRQ_EDGE_FALL:
-        // Just one tag can be entering at the same time
-        if (num == gNFC.pinout.irq && !gTag_entering){
-            // gNFC.flags.B.nbf = 1; ///< Activate the flag to get the number of bytes in the NFC FIFO
-            gTag_entering = true;
-            printf("Tag entering - FALL\n");
-        }
-        else {
-            printf("Edge fall\n");
-        }
-
         break;
     
     default:
@@ -308,23 +301,6 @@ void gpioCallback(uint num, uint32_t mask)
     }
     
     gpio_acknowledge_irq(num, mask); ///< gpio IRQ acknowledge
-}
-
- void dbnc_timer_handler(void)
-{
-    ///< Interrupt acknowledge
-    hw_clear_bits(&timer_hw->intr, 1u << gKeyPad.timer_irq);
-
-    uint32_t rows = gpio_get_all() & (0x0000000f << gKeyPad.KEY.rlsb); ///< Get rows gpio values
-    if (rows){ ///< If a key was pressed, set the alarm again
-        printf("Debouncer\n");
-        kp_dbnc_set_alarm(&gKeyPad);
-    }else {
-        gKeyPad.KEY.dbnc = 0;
-        gFlags.B.key = 1; ///< The key is processed once the debouncer is finished
-        kp_set_irq_cols(&gKeyPad); ///< Switch interrupt to columns
-        irq_set_enabled(gKeyPad.timer_irq, false); ///< Disable the debouncer timer
-    }
 }
 
 void led_timer_handler(void)
@@ -352,33 +328,53 @@ void check_tag_timer_handler(void)
     timer_hw->alarm[gNFC.timer_irq] = (uint32_t)(time_us_64() + gNFC.timeCheck); ///< Set alarm1 to trigger in 1s
 
     // Check for a tag entering
-    if (!gTag_entering && nfc_is_new_tag(&gNFC)){
-        gTag_entering = true;
-        nfc_read_card_serial(&gNFC); ///< Read the serial number of the card
-        // Print the serial number of the card
-        printf("\nCard UID: ");
-        for (int i = 0; i < gNFC.uid.size; i++) {
-            printf("%02X", gNFC.uid.uidByte[i]);
-        }
-        printf("\n");
-        // Check if the card is a Mifare Classic card
-        if(nfc_authenticate(&gNFC, PICC_CMD_MF_AUTH_KEY_A, gNFC.blockAddr, &gNFC.keyByte[0], &(gNFC.uid))==0){
-            if(nfc_read_card(&gNFC, gNFC.blockAddr, gNFC.bufferRead, &gNFC.sizeRead)==0){
-                led_setup(&gLed, 0x02); ///<  Green color
-                printf("Block readed\n\r");
-                for (int i = 0; i < 16; i++) {
-                    printf("%02x ", gNFC.bufferRead[i]);
-                }
-                printf("\n");
-                nfc_stop_crypto1(&gNFC);
-                printf( "\n");
-            }else{
-                led_setup(&gLed, 0x04); ///< Red color
-            }
-        }else {
-            led_setup(&gLed, 0x04); ///< Red color
-        }
+    if (!gNFC.tag.is_present && nfc_is_new_tag(&gNFC)){
+        gFlags.B.nfc_tag = 1; ///< Activate the flag of the NFC interruption to read the card
     }
 }
 
+
+void initPWMasPIT(uint8_t slice, uint16_t milis, bool enable)
+{
+    assert(milis<=262);                  // PWM can manage interrupt periods greater than 262 milis
+    float prescaler = (float)SYS_CLK_KHZ/500;
+    assert(prescaler<256); // the integer part of the clock divider can be greater than 255 
+                 // ||   counter frecuency    ||| Period in seconds taking into account de phase correct mode |||   
+    uint32_t wrap = (1000*SYS_CLK_KHZ*milis/(prescaler*2*1000)); // 500000*milis/2000
+    assert(wrap<((1UL<<17)-1));
+    // Configuring the PWM
+    pwm_config cfg =  pwm_get_default_config();
+    pwm_config_set_phase_correct(&cfg, true);
+    pwm_config_set_clkdiv(&cfg, prescaler);
+    pwm_config_set_clkdiv_mode(&cfg, PWM_DIV_FREE_RUNNING);
+    pwm_config_set_wrap(&cfg, wrap);
+    pwm_set_irq_enabled(slice, true);
+    irq_set_enabled(PWM_IRQ_WRAP, true);
+    pwm_init(slice, &cfg, enable);
+ }
+
+ void pwm_handler(void)
+ {
+    uint32_t rows;
+    bool button;
+    switch (pwm_get_irq_status_mask())
+    {
+    case 0x01UL: // PWM slice 0 is used for the button debouncer
+        rows = gpio_get_all() & (0x0000000f << gKeyPad.KEY.rlsb); ///< Get rows gpio values
+        if (!rows){ ///< If a key was not pressed, process the key and disable the debouncer
+            gKeyPad.KEY.dbnc = 0;
+            gFlags.B.key = 1; ///< The key is processed once the debouncer is finished
+            kp_set_irq_cols(&gKeyPad); ///< Switch interrupt to columns
+            pwm_set_enabled(gKeyPad.pwm_slice, false); ///< Disable the debouncer PIT
+        }else {
+            printf("Debouncing\n");
+        }
+        pwm_clear_irq(0);         // Acknowledge slice 0 PWM IRQ
+        break; 
+
+    default:
+        printf("Happend what should not happens on PWM IRQ\n");
+        break;
+    }
+ }
 
