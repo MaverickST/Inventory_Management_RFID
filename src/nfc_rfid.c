@@ -28,12 +28,13 @@ void nfc_init_as_spi(nfc_rfid_t *nfc, spi_inst_t *_spi, uint8_t sck, uint8_t mos
     nfc->pinout.cs = cs;
     nfc->pinout.irq = irq;
     nfc->pinout.rst = rst;
-    nfc->userType = INV;
+    nfc->userType = NONE;
     nfc->timeCheck = 1000000; ///< 1s = 1000000 us
     nfc->timer_irq = TIMER_IRQ_1;
     nfc->blockAddr = 1;
     nfc->sizeRead = 18;
 	nfc->tag.is_present = false;
+	nfc->check = true;
 
     nfc->spi = _spi;
     if (_spi == spi0){
@@ -541,10 +542,11 @@ StatusCode nfc_calculate_crc(nfc_rfid_t *nfc, uint8_t *data, uint8_t len, uint8_
 	return STATUS_OK;
 } // End of nfc_calculate_crc
 
-void nfc_get_data_tag(nfc_rfid_t *nfc)
+bool nfc_get_data_tag(nfc_rfid_t *nfc)
 {
     // The first byte of bufferRead is the product ID.
-    nfc->tag.id = nfc->bufferRead[15];
+    // nfc->tag.id = nfc->bufferRead[15];
+	nfc->tag.id = 2;
 
     nfc->tag.amount = (nfc->bufferRead[11] << 24) | (nfc->bufferRead[12] << 16) | (nfc->bufferRead[13] << 8) | nfc->bufferRead[14];
     nfc->tag.purchase_v = (nfc->bufferRead[7] << 24) | (nfc->bufferRead[8] << 16) | (nfc->bufferRead[9] << 8) | nfc->bufferRead[10];
@@ -562,10 +564,11 @@ void nfc_get_data_tag(nfc_rfid_t *nfc)
 		nfc->userType = INV;
 	} else if (nfc->tag.id == 0x01 || nfc->tag.id == 0x02 || nfc->tag.id == 0x03 || nfc->tag.id == 0x04 || nfc->tag.id == 0x05) {
 		nfc->userType = USER;
-	} else {
-		// nfc->tag.is_present = false; ACTUALLY
+	} else { ///< Invalid ID
+		nfc->tag.is_present = false;
+		return false;
 	}
 
-	
-}
+	return true;
+} // End of nfc_get_data_tag
 

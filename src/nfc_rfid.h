@@ -13,6 +13,7 @@
 
 #include <stdint.h>
 #include "hardware/spi.h"
+#include "hardware/gpio.h"
 
 #include "nfc_enums.h"
 
@@ -21,21 +22,13 @@
 #define READ_BIT 0x80 ///< Bit used in I2C to read a register
 #define BUFFER_SIZE  1 ///< Buffer size for the SPI communication
 
+
 /**
  * \typedef nfc_rfic_t
  * \brief Data strcuture to manage the NFC RFID device.
  */
 typedef struct
 {
-    struct
-    {
-        uint8_t id;
-        uint32_t amount;
-        uint32_t purchase_v;
-        uint32_t sale_v;
-        bool is_present; ///< Flag that indicates that a tag is being entered
-    }tag;
-
     struct {
         uint8_t irq;
         uint8_t rst;
@@ -47,6 +40,7 @@ typedef struct
 	
     uint8_t keyByte[MF_KEY_SIZE]; ///< Mifare Crypto1 key	
     uint32_t timeCheck; ///< Time check (1s)
+    bool check; ///< Check flag
     uint8_t timer_irq; ///< Alarm timer IRQ number (TIMER_IRQ_1)
 
     uint8_t spi_irq; ///< SPI IRQ number (25 or 26)
@@ -55,6 +49,7 @@ typedef struct
     uint8_t Tx_Buf[BUFFER_SIZE];
 	uint8_t Rx_Buf[BUFFER_SIZE];
     Uid uid; ///< UID of the tag
+    tag_t tag; ///< Tag data
 
     uint8_t bufferRead[18]; ///< Buffer for the read data
     uint8_t sizeRead; ///< Size of the read data
@@ -401,11 +396,12 @@ static inline void nfc_stop_crypto1(nfc_rfid_t *nfc)
 StatusCode nfc_calculate_crc(nfc_rfid_t *nfc, uint8_t *data, uint8_t len, uint8_t *result);
 
 /**
- * @brief From the nfc fifo, get the data tag.
+ * @brief Get the data of the product from the bufferRead.
  * 
  * @param nfc 
+ * @return true if the ID is valid (range 1-7), false otherwise.
  */
-void nfc_get_data_tag(nfc_rfid_t *nfc);
+bool nfc_get_data_tag(nfc_rfid_t *nfc);
 
 
 

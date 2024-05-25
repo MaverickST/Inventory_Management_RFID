@@ -1,4 +1,3 @@
-#include "inventory.h"
 /**
  * \file        inventory.c
  * \brief
@@ -14,15 +13,28 @@
 #include <stdlib.h>
 #include "hardware/sync.h"
 #include "pico/flash.h"
+#include "pico/time.h"
+#include "hardware/irq.h"
 
 #include "inventory.h"
 
 void inventory_init(inventory_t *inv, bool access)
 {
     inv->access = access;
+    inv->timer_irq = TIMER_IRQ_3;
+    inv->time = 3000000; // 3 seconds
+    inv->state = DATA_BASE;
+    inv->count.id = 0;
+    inv->count.frame = 0;
+    inv->today.amount = 0;
+    inv->today.purchases = 0;
+    inv->today.sales = 0;
+
+    // Initialize the database
     inventory_load(inv);
     printf("Inventory initialized\n");
     inventory_print_data(inv->database[0]);
+    
 }
 
 void inventory_store(inventory_t *inv)
@@ -83,23 +95,27 @@ void inventory_print_data(uint32_t *data)
 
 }
 
-void inventory_in_transaction(inventory_t *inv, uint8_t id, uint32_t amount, uint32_t purchase_v, uint32_t sale_v)
+void inventory_in_transaction(inventory_t *inv)
 {
-    inv->database[id][0] += amount;
-    inv->database[id][1] += purchase_v;
-    inv->database[id][2] += sale_v;
+    inv->database[inv->tag.id - 1][0] += inv->tag.amount;
+    inventory_store(inv);
+
+    inv->today.amount += inv->tag.amount;
+    inv->today.purchases += (inv->tag.purchase_v * inv->tag.amount);
 }
 
-void inventory_out_transaction(inventory_t *inv, uint8_t id, uint32_t amount, uint32_t purchase_v, uint32_t sale_v)
+bool inventory_out_transaction(inventory_t *inv)
 {
-    if (inv->database[id][0] < amount) {
-        printf("Not enough stock\n");
-        return;
+    if (inv->database[inv->tag.id][0] < inv->tag.amount) {
+        return false;
     }
     else {
-        inv->database[id][0] -= amount;
-        inv->database[id][1] -= purchase_v;
-        inv->database[id][2] -= sale_v;
-    
+        inv->database[inv->tag.id - 1][0] -= inv->tag.amount;
+        inventory_store(inv);
+
+        inv->today.amount -= inv->tag.amount;
+        inv->today.sales += (inv->tag.sale_v * inv->tag.amount);
+        return true;
     }
 }
+

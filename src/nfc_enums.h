@@ -58,6 +58,19 @@ typedef struct _TagInfo{
     bool blockNumber;
 } TagInfo;
 
+/**
+ * \typedef tag_t
+ * \brief Data strcuture to manage the tag of the actual TAG
+ */
+typedef struct _tag
+{
+    uint32_t id;
+    uint32_t amount;
+    uint32_t purchase_v;
+    uint32_t sale_v;
+    bool is_present; ///< Flag that indicates that a tag is being entered
+}tag_t;
+
 
 // --------------------------------------------------------------------------------------------------
 // ---------------------------------- NFC ENUMS ----------------------------------------------------
