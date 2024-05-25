@@ -98,7 +98,7 @@ bool nfc_is_new_tag(nfc_rfid_t *nfc);
  * @param uid 
  * @return StatusCode 
  */
-StatusCode nfc_authenticate(nfc_rfid_t *nfc, uint8_t command, uint8_t blockAddr, uint8_t *keyByte, Uid *uid);
+uint8_t nfc_authenticate(nfc_rfid_t *nfc, uint8_t command, uint8_t blockAddr, uint8_t *keyByte, Uid *uid);
 
 /**
  * @brief Transmits SELECT/ANTICOLLISION commands to select a single PICC.
@@ -110,7 +110,7 @@ StatusCode nfc_authenticate(nfc_rfid_t *nfc, uint8_t command, uint8_t blockAddr,
  * @param validBits 
  * @return StatusCode 
  */
-StatusCode nfc_select(nfc_rfid_t *nfc, Uid *uid, uint8_t validBits);
+uint8_t nfc_select(nfc_rfid_t *nfc, Uid *uid, uint8_t validBits);
 
 /**
  * @brief Reads a block of data from the active PICC.
@@ -121,7 +121,7 @@ StatusCode nfc_select(nfc_rfid_t *nfc, Uid *uid, uint8_t validBits);
  * @param bufferSize 
  * @return StatusCode 
  */
-StatusCode nfc_read_card(nfc_rfid_t *nfc, uint8_t blockAddr, uint8_t *buffer, uint8_t *bufferSize);
+uint8_t nfc_read_card(nfc_rfid_t *nfc, uint8_t blockAddr, uint8_t *buffer, uint8_t *bufferSize);
 
 /**
  * @brief Simple wrapper around PICC_Select.
@@ -393,7 +393,7 @@ static inline void nfc_stop_crypto1(nfc_rfid_t *nfc)
  * @param result 
  * @return uint8_t STATUS_OK on success, STATUS_??? otherwise.
  */
-StatusCode nfc_calculate_crc(nfc_rfid_t *nfc, uint8_t *data, uint8_t len, uint8_t *result);
+uint8_t nfc_calculate_crc(nfc_rfid_t *nfc, uint8_t *data, uint8_t len, uint8_t *result);
 
 /**
  * @brief Get the data of the product from the bufferRead.

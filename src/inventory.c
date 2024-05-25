@@ -83,11 +83,15 @@ void invetory_wrapper()
 
 void inventory_print_data(uint32_t *data)
 {
-    printf("ID\t \t Amount\t Purchase Value\t Sale Value\n");
+    printf("ID\t \t Amount\t Purchase\t Sale \n");
     for (int i = 0; i < 5; i++){
         printf("%d\t \t", i + 1);
         for (int j = 0; j < 3; j++){
-            printf("  %d\t", data[i*3 + j]);
+            if (j == 2) {
+                printf("           %u\t", data[i*3 + j]);
+            }else {
+                printf("  %u\t", data[i*3 + j]);
+            }
         }
         printf("\n");
     }
