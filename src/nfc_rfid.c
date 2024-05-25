@@ -28,12 +28,13 @@ void nfc_init_as_spi(nfc_rfid_t *nfc, spi_inst_t *_spi, uint8_t sck, uint8_t mos
     nfc->pinout.cs = cs;
     nfc->pinout.irq = irq;
     nfc->pinout.rst = rst;
-    nfc->userType = INV;
+    nfc->userType = NONE;
     nfc->timeCheck = 1000000; ///< 1s = 1000000 us
     nfc->timer_irq = TIMER_IRQ_1;
     nfc->blockAddr = 1;
     nfc->sizeRead = 18;
 	nfc->tag.is_present = false;
+	nfc->check = true;
 
     nfc->spi = _spi;
     if (_spi == spi0){
@@ -112,7 +113,7 @@ bool nfc_is_new_tag(nfc_rfid_t *nfc)
     return (result == STATUS_OK || result == STATUS_COLLISION);
 }
 
-StatusCode nfc_authenticate(nfc_rfid_t *nfc, uint8_t command, uint8_t blockAddr, uint8_t *keyByte, Uid *uid)
+uint8_t nfc_authenticate(nfc_rfid_t *nfc, uint8_t command, uint8_t blockAddr, uint8_t *keyByte, Uid *uid)
 {
     uint8_t waitIRq = 0x10; // IdleIRq
 
@@ -130,7 +131,7 @@ StatusCode nfc_authenticate(nfc_rfid_t *nfc, uint8_t command, uint8_t blockAddr,
     return status;
 }
 
-StatusCode nfc_select(nfc_rfid_t *nfc, Uid *uid, uint8_t validBits)
+uint8_t nfc_select(nfc_rfid_t *nfc, Uid *uid, uint8_t validBits)
 {	
     bool uidComplete;
 	bool selectDone;
@@ -369,7 +370,7 @@ StatusCode nfc_select(nfc_rfid_t *nfc, Uid *uid, uint8_t validBits)
 	return STATUS_OK;
 } // End of nfc_select
 
-StatusCode nfc_read_card(nfc_rfid_t *nfc, uint8_t blockAddr, uint8_t *buffer, uint8_t *bufferSize)
+uint8_t nfc_read_card(nfc_rfid_t *nfc, uint8_t blockAddr, uint8_t *buffer, uint8_t *bufferSize)
 {
     StatusCode result;
 
@@ -510,7 +511,7 @@ uint8_t nfc_requestA_or_wakeupA(nfc_rfid_t *nfc, uint8_t command, uint8_t *buffe
     return STATUS_OK;
 } // End of nfc_requestA_or_wakeupA
 
-StatusCode nfc_calculate_crc(nfc_rfid_t *nfc, uint8_t *data, uint8_t len, uint8_t *result)
+uint8_t nfc_calculate_crc(nfc_rfid_t *nfc, uint8_t *data, uint8_t len, uint8_t *result)
 {
     nfc_write(nfc, CommandReg, PCD_Idle); // Stop any active command.
 	nfc_write(nfc, DivIrqReg, 0x04); // Clear the CRCIRq interrupt request bit
@@ -541,19 +542,11 @@ StatusCode nfc_calculate_crc(nfc_rfid_t *nfc, uint8_t *data, uint8_t len, uint8_
 	return STATUS_OK;
 } // End of nfc_calculate_crc
 
-void nfc_get_data_tag(nfc_rfid_t *nfc)
+bool nfc_get_data_tag(nfc_rfid_t *nfc)
 {
     // The first byte of bufferRead is the product ID.
     nfc->tag.id = nfc->bufferRead[15];
-
-    nfc->tag.amount = (nfc->bufferRead[11] << 24) | (nfc->bufferRead[12] << 16) | (nfc->bufferRead[13] << 8) | nfc->bufferRead[14];
-    nfc->tag.purchase_v = (nfc->bufferRead[7] << 24) | (nfc->bufferRead[8] << 16) | (nfc->bufferRead[9] << 8) | nfc->bufferRead[10];
-    nfc->tag.sale_v = (nfc->bufferRead[3] << 24) | (nfc->bufferRead[4] << 16) | (nfc->bufferRead[5] << 8) | nfc->bufferRead[6];
-
 	printf("ID: %02x\n", nfc->tag.id);
-	printf("Amount: %08x\n", nfc->tag.amount);
-	printf("Purchase value: %08x\n", nfc->tag.purchase_v);
-	printf("Sale value: %08x\n", nfc->tag.sale_v);
 
 	// From the ID, we can determine the type of the user
 	if (nfc->tag.id == 0x07) {
@@ -562,10 +555,22 @@ void nfc_get_data_tag(nfc_rfid_t *nfc)
 		nfc->userType = INV;
 	} else if (nfc->tag.id == 0x01 || nfc->tag.id == 0x02 || nfc->tag.id == 0x03 || nfc->tag.id == 0x04 || nfc->tag.id == 0x05) {
 		nfc->userType = USER;
-	} else {
-		// nfc->tag.is_present = false; ACTUALLY
+		nfc->tag.amount = (nfc->bufferRead[11] << 24) | (nfc->bufferRead[12] << 16) | (nfc->bufferRead[13] << 8) | nfc->bufferRead[14];
+		nfc->tag.purchase_v = (nfc->bufferRead[7] << 24) | (nfc->bufferRead[8] << 16) | (nfc->bufferRead[9] << 8) | nfc->bufferRead[10];
+		nfc->tag.sale_v = (nfc->bufferRead[3] << 24) | (nfc->bufferRead[4] << 16) | (nfc->bufferRead[5] << 8) | nfc->bufferRead[6];
+
+		if ((nfc->tag.amount >> 31) | (nfc->tag.purchase_v >> 31) | (nfc->tag.sale_v >> 31)) { ///< Negative values
+			nfc->tag.is_present = false;
+			return false;
+		}
+		printf("Amount: %u\n", nfc->tag.amount);
+		printf("Purchase value: %u\n", nfc->tag.purchase_v);
+		printf("Sale value: %u\n", nfc->tag.sale_v);
+	} else { ///< Invalid ID
+		nfc->tag.is_present = false;
+		return false;
 	}
 
-	
-}
+	return true;
+} // End of nfc_get_data_tag
 

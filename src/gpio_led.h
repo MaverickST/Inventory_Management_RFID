@@ -63,8 +63,8 @@ static inline void led_set_alarm(led_rgb_t *led)
     // Setting the IRQ handler
     irq_set_exclusive_handler(led->timer_irq, led_timer_handler);
     irq_set_enabled(led->timer_irq, true);
-    hw_set_bits(&timer_hw->inte, 1u << led->timer_irq); ///< Enable alarm1 for keypad debouncer
-    timer_hw->alarm[led->timer_irq] = (uint32_t)(time_us_64() + led->time); ///< Set alarm1 to trigger in 100ms
+    hw_set_bits(&timer_hw->inte, 1u << led->timer_irq); ///< 
+    timer_hw->alarm[led->timer_irq] = (uint32_t)(time_us_64() + led->time); ///< Set alarm2 to trigger in 1s
 }
 
 /**

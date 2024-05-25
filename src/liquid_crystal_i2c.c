@@ -14,7 +14,7 @@ void lcd_init(lcd_t *lcd, uint8_t addr, i2c_inst_t *i2c, uint8_t cols, uint8_t r
     lcd->display = 0;
     lcd->cursor = 0;
     lcd->temp_message = NULL;
-    lcd->num_alarm = 0;
+    lcd->num_alarm = TIMER_IRQ_0;
     lcd->pos_secuence = 0;
     lcd->en = false;
 
@@ -209,7 +209,6 @@ void lcd_initialization_timer_handler(void)
         break;
     case 8:
         gLcd.en = true;
-        printf("LCD initialized\n");
         break;
     default:
         break;

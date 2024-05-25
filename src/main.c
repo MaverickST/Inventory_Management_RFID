@@ -89,9 +89,11 @@ int main() {
     initPWMasPIT(0,100, false); // 100ms for the button debouncer
     irq_set_exclusive_handler(PWM_IRQ_WRAP,pwm_handler);
 
-    // Set alarm
-    printf("Set tag alarm\n");
+    // Set check tag alarm
     check_tag_timer_handler();
+
+    // Set inventary show alarm
+    // show_inventory_timer_handler();
 
     while(1){
         while(check()){

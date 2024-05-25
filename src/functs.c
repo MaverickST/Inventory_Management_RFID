@@ -93,6 +93,7 @@ void program(void)
                     }else {
                         printf("Incorrect password\n");
                         gNFC.tag.is_present = false;
+                        gNFC.check = true; ///< Restart the check tag timer
                         in_state_admin = adminNONE;
                         in_value = 0;
                         in_cont = 0;
@@ -111,6 +112,7 @@ void program(void)
             else if (key == 0x0D){
                 printf("Finished Admin process\n");
                 gNFC.tag.is_present = false;
+                gNFC.check = true; ///< Restart the check tag timer
                 in_state_admin = adminNONE;
                 in_value = 0;
                 in_cont = 0;
@@ -161,7 +163,7 @@ void program(void)
             }
             ///< Update the database
             else if (key == 0x0D && in_state_inv != inNONE && id_state_inv != idNONE){
-                printf("Updating database   value: %d    id: %d   type: %d\n", in_value, id_state_inv, in_state_inv);
+                printf("Updating database   value: %u    id: %u   type: %u\n", in_value, id_state_inv, in_state_inv);
                 switch (in_state_inv)
                 {
                 case AMOUNT:
@@ -186,6 +188,7 @@ void program(void)
             // Finish the process
             else if (key == 0x0D && in_state_inv == inNONE && id_state_inv == idNONE) {
                 gNFC.tag.is_present = false;
+                gNFC.check = true; ///< Restart the check tag timer
                 printf("Finished Inv User\n");
                 // Led control
                 led_setup(&gLed, 0x06); ///< Yellow color
@@ -203,22 +206,28 @@ void program(void)
         case USER: ///< User is entering
             ///< Input transaction
             if (key == 0x0A) {
-                inventory_in_transaction(&gInventory, 
-                    gNFC.tag.id, gNFC.tag.amount, gNFC.tag.purchase_v, gNFC.tag.sale_v);
-                ///< It is missing to show the data of the transaction on the screen
-            }
-            ///< Output transaction
-            else if (key == 0x0B) {
-                inventory_out_transaction(&gInventory, 
-                    gNFC.tag.id, gNFC.tag.amount, gNFC.tag.purchase_v, gNFC.tag.sale_v);
-                ///< It is missing to show the data of the transaction on the screen
-            }
-            ///< Finish the process
-            else if (key == 0x0D) {
+                inventory_in_transaction(&gInventory);
+                    
                 gNFC.tag.is_present = false;
+                gNFC.check = true; ///< Restart the check tag timer
                 printf("Finished User\n");
                 // Led control
                 led_setup(&gLed, 0x06); ///< Yellow color
+                gInventory.state = DATA_BASE; ///< Now that user go out, Show the data base on LCD
+            }
+            ///< Output transaction
+            else if (key == 0x0B) {
+                if (inventory_out_transaction(&gInventory)) { ///< Transaction success
+                    // Led control
+                    led_setup(&gLed, 0x06); ///< Yellow color
+                }else { ///< Transaction failed
+                    // Led control
+                    led_setup(&gLed, 0x04); ///< Red color
+                }
+                gNFC.tag.is_present = false;
+                gNFC.check = true; ///< Restart the check tag timer
+                printf("Finished User\n");
+                gInventory.state = DATA_BASE; ///< Now that user go out, Show the data base on LCD
             }
             else {
                 printf("Invalid key - USER\n");
@@ -251,9 +260,18 @@ void program(void)
                 }
                 printf("\n");
                 nfc_stop_crypto1(&gNFC);
-                
-                led_setup(&gLed, 0x02); ///<  Green color
-                nfc_get_data_tag(&gNFC); ///< From the nfc fifo, get the data tag
+                // Check if the card is a the card had the correct data
+                if(nfc_get_data_tag(&gNFC)) {///< From the nfc fifo, get the data tag and chet the ID of the tag
+                    led_setup(&gLed, 0x02); ///<  Green color
+                    gNFC.check = false; ///< Stop the check of the tag
+                    // Congiguring the gInventory to show correctlly the data
+                    if (gNFC.tag.id >= 0x01 && gNFC.tag.id <= 0x05){
+                        gInventory.tag = gNFC.tag; ///< Copy the tag data to the inventory tag
+                        gInventory.state = IN__OUT_TRANSACTION; ///< Show the transaction
+                    }
+                }else {
+                    led_setup(&gLed, 0x04); ///< Red colors
+                }
             }else{
                 led_setup(&gLed, 0x04); ///< Red color
             }
@@ -269,6 +287,11 @@ void program(void)
         gKeyPad.rows = gpio_get_all() & (0x0000000f << gKeyPad.KEY.rlsb); ///< Get rows gpio values
         pwm_set_enabled(gKeyPad.pwm_slice, true); ///< Set the debouncer alarm
         gFlags.B.kpad_switch = 0;
+    }
+    ///< Inventory show interrupt flags
+    if (gFlags.B.inv_show){
+        gFlags.B.inv_show = 0; ///< Clear the flag
+        show_inventory(); ///< Show the inventory on the LCD
     }
 }
 
@@ -318,7 +341,6 @@ void led_timer_handler(void)
 
 void check_tag_timer_handler(void)
 {
-    lcd_send_str_cursor(&gLcd, "Check tag handler", 0, 0);
     // Set the alarm
     hw_clear_bits(&timer_hw->intr, 1u << gNFC.timer_irq);
     // Setting the IRQ handler
@@ -328,11 +350,79 @@ void check_tag_timer_handler(void)
     timer_hw->alarm[gNFC.timer_irq] = (uint32_t)(time_us_64() + gNFC.timeCheck); ///< Set alarm1 to trigger in 1s
 
     // Check for a tag entering
-    if (!gNFC.tag.is_present && nfc_is_new_tag(&gNFC)){
+    if (!gNFC.tag.is_present && nfc_is_new_tag(&gNFC) && gNFC.check){
         gFlags.B.nfc_tag = 1; ///< Activate the flag of the NFC interruption to read the card
+    }
+
+    // Show the inventory every 3 seconds
+    gInventory.count.it = (gInventory.count.it + 1) % 3;
+    if (gInventory.count.it == 2){
+        gFlags.B.inv_show = 1; ///< Activate the flag of the inventory show interruption
+        gInventory.count.it = 0;
     }
 }
 
+void show_inventory(void)
+{
+    uint8_t str_0[16]; ///< Line 0 of the LCD
+    uint8_t str_1[16]; ///< Line 1 of the LCD
+    
+    lcd_send_str_cursor(&gLcd, "                ", 0, 0);
+    lcd_send_str_cursor(&gLcd, "                ", 1, 0);
+
+    switch (gInventory.state)
+    {
+    case DATA_BASE:
+        switch (gInventory.count.id)
+        {
+        case 5: ///< Show the today transactions
+            if (!gInventory.count.frame) {
+                sprintf((char *)str_1, "AMNT: %u", gInventory.today.amount);
+                lcd_send_str_cursor(&gLcd, "TodayTransactions", 0, 0);
+                lcd_send_str_cursor(&gLcd, str_1, 1, 0);
+            }else {
+                sprintf((char *)str_0, "PRCH: %u", gInventory.today.purchases);
+                sprintf((char *)str_1, "SAL: %u", gInventory.today.sales);
+                lcd_send_str_cursor(&gLcd, str_0, 0, 0);
+                lcd_send_str_cursor(&gLcd, str_1, 1, 0);
+            }
+            break;
+        default: ///< Show the data base
+            if (!gInventory.count.frame) {
+                sprintf((char *)str_0, "Inventory  ID: %u", gInventory.count.id + 1);
+                sprintf((char *)str_1, "AMNT: %u", gInventory.database[gInventory.count.id][0]);
+                lcd_send_str_cursor(&gLcd, str_0, 0, 0);
+                lcd_send_str_cursor(&gLcd, str_1, 1, 0);
+            }else {
+                sprintf((char *)str_0, "PRCH: %u", gInventory.database[gInventory.count.id][1]);
+                sprintf((char *)str_1, "SAL: %u", gInventory.database[gInventory.count.id][2]);
+                lcd_send_str_cursor(&gLcd, str_0, 0, 0);
+                lcd_send_str_cursor(&gLcd, str_1, 1, 0);
+            }
+            break;
+        }
+        break;
+    case IN__OUT_TRANSACTION:
+        if (!gInventory.count.frame) { ///< First frame
+            sprintf((char *)str_0, "TagData  ID: %u", gInventory.tag.id);
+            sprintf((char *)str_1, "AMNT: %u", gInventory.tag.amount);
+            lcd_send_str_cursor(&gLcd, str_0, 0, 0);
+            lcd_send_str_cursor(&gLcd, str_1, 1, 0);
+        }else {
+            sprintf((char *)str_0, "PRCH: %u", gInventory.tag.purchase_v);
+            sprintf((char *)str_1, "SAL: %d", gInventory.tag.sale_v);
+            lcd_send_str_cursor(&gLcd, str_0, 0, 0);
+            lcd_send_str_cursor(&gLcd, str_1, 1, 0);
+        }
+        break;
+    default:
+        break;
+    }
+    gInventory.count.frame += 1;
+    if (!gInventory.count.frame){
+        gInventory.count.id = (gInventory.count.id + 1) % 6;
+    }
+}
 
 void initPWMasPIT(uint8_t slice, uint16_t milis, bool enable)
 {
@@ -366,8 +456,6 @@ void initPWMasPIT(uint8_t slice, uint16_t milis, bool enable)
             gFlags.B.key = 1; ///< The key is processed once the debouncer is finished
             kp_set_irq_cols(&gKeyPad); ///< Switch interrupt to columns
             pwm_set_enabled(gKeyPad.pwm_slice, false); ///< Disable the debouncer PIT
-        }else {
-            printf("Debouncing\n");
         }
         pwm_clear_irq(0);         // Acknowledge slice 0 PWM IRQ
         break; 

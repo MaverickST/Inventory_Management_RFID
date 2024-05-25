@@ -23,7 +23,8 @@ typedef union{
         uint8_t key         :1; //keypad interruption pending
         uint8_t nfc_tag     :1; //tag interruption pending
         uint8_t kpad_switch :1; //keypad switch interruption pending
-        uint8_t             :5;
+        uint8_t inv_show    :1; //inventory show interruption pending
+        uint8_t             :4;
     }B;
 }flags_t;
 
@@ -46,6 +47,12 @@ void program(void);
  * @return false When there are not a flag of interruption pending
  */
 bool check();
+
+/**
+ * @brief This function allows to show the inventory of the system on the LCD based on flags and states.
+ * 
+ */
+void show_inventory(void);
 
 // -------------------------------------------------------------
 // ---------------- Callback and handler functions -------------
