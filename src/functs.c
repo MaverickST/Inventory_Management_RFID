@@ -263,6 +263,7 @@ void program(void)
                 // Check if the card is a the card had the correct data
                 if(nfc_get_data_tag(&gNFC)) {///< From the nfc fifo, get the data tag and chet the ID of the tag
                     led_setup(&gLed, 0x02); ///<  Green color
+                    printf("Tag ID: %u\n", gNFC.tag.id);
                     gNFC.check = false; ///< Stop the check of the tag
                     // Congiguring the gInventory to show correctlly the data
                     if (gNFC.tag.id >= 0x01 && gNFC.tag.id <= 0x05){

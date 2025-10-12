@@ -110,7 +110,7 @@ void inventory_in_transaction(inventory_t *inv)
 
 bool inventory_out_transaction(inventory_t *inv)
 {
-    if (inv->database[inv->tag.id][0] < inv->tag.amount) {
+    if (inv->database[inv->tag.id - 1][0] < inv->tag.amount) {
         return false;
     }
     else {
